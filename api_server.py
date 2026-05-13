@@ -1,5 +1,6 @@
 """Railway API wrapper for Vision Perception Probe."""
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import uuid
@@ -7,7 +8,16 @@ from vision_probe import run_pipeline
 
 app = FastAPI(title="OPS Vision Perception Probe", version="2.0.0")
 
-# In-memory job store (replace with Redis/Postgres for production)
+# Enable CORS for the Sovereign Dashboard
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, replace with your Vercel URL
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# In-memory job store
 jobs: dict = {}
 
 class ProbeRequest(BaseModel):
