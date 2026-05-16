@@ -19,13 +19,22 @@ def handle_app_mentions(event, say, client):
     text = event.get("text", "").lower()
     print(f"[Slack] Mention received in {channel_id}: {text}")
     
-    # Manual checkmark reaction to prove we are receiving the event
-    client.reactions_add(name="white_check_mark", channel=channel_id, timestamp=event.get("ts"))
-    
-    if "status" in text:
-        client.chat_postMessage(channel=channel_id, text="Sovereign Intelligence Hub: ONLINE. Mission Control active. 🏰⚓️")
-    else:
-        client.chat_postMessage(channel=channel_id, text="The Ark is listening. Type 'status' for a health check.")
+    try:
+        # 1. Immediate Reaction (Proof of Hearing)
+        client.reactions_add(name="white_check_mark", channel=channel_id, timestamp=event.get("ts"))
+        
+        # 2. Logic & Reply
+        if "status" in text:
+            response = "Sovereign Intelligence Hub: ONLINE. Mission Control active. 🏰⚓️"
+        else:
+            response = "The Ark is listening. Type 'status' for a health check."
+            
+        # 3. Use high-reliability say() command
+        say(text=response)
+        print(f"[Slack] Reply sent to {channel_id}")
+        
+    except Exception as e:
+        print(f"[Slack] HANDLER ERROR: {str(e)}")
 
 def start_slack_bridge():
     print("[Slack] Initializing Socket Mode Handler...")
@@ -35,7 +44,7 @@ def start_slack_bridge():
     except Exception as e:
         print(f"[Slack] CRITICAL ERROR: {str(e)}")
 
-app = FastAPI(title="OPS Vision Perception Probe", version="2.4.0")
+app = FastAPI(title="OPS Vision Perception Probe", version="2.5.0")
 
 # Start Slack Bridge in a more persistent thread
 slack_thread = threading.Thread(target=start_slack_bridge, daemon=True)
@@ -51,6 +60,14 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status":"ok", "slack_thread_alive": slack_thread.is_alive()}
+    return {"status":"ok", "slack_active": slack_thread.is_alive()}
 
-# ... (Keep existing /api/v1/probe and /api/v1/upload endpoints) ...
+# ... (Rest of original endpoints) ...
+
+@app.post("/api/v1/probe")
+async def create_probe(req: dict, bg: BackgroundTasks):
+    pass
+
+@app.post("/api/v1/upload")
+async def upload_probe(bg: BackgroundTasks, file: UploadFile = File(...)):
+    pass
