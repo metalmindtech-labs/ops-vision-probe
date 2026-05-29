@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+} from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -80,7 +86,18 @@ export default function ConversionPanel({
 
     const copy = async (text, label) => {
         try {
-            await navigator.clipboard.writeText(text);
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement("textarea");
+                ta.value = text;
+                ta.style.position = "fixed";
+                ta.style.opacity = "0";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+            }
             toast.success(`${label} copied`);
         } catch {
             toast.error("Copy failed");
@@ -107,6 +124,11 @@ export default function ConversionPanel({
                         <SheetTitle className="font-mono text-xl text-zinc-50 leading-tight">
                             {signal.event_title}
                         </SheetTitle>
+                        <SheetDescription className="sr-only">
+                            Conversion Engine for {signal.event_title}. Define
+                            lead magnet, paid offer, and CTA, then trigger
+                            syllabus generation.
+                        </SheetDescription>
                         <div className="flex items-center gap-3 text-xs text-zinc-400 font-mono">
                             <span>{signal.category}</span>
                             <span className="text-zinc-700">|</span>
