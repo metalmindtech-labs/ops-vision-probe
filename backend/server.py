@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException
+from fastapi import FastAPI, APIRouter, HTTPException, Body
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -11,10 +11,15 @@ import uuid
 import re
 from datetime import datetime, timezone
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+
+from services.ingestion import run_scrape, ingest_html, latest_run
+from services.ai import generate_syllabus_ai
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
@@ -22,8 +27,10 @@ db = client[os.environ['DB_NAME']]
 app = FastAPI(title="LearnForge Opportunity Radar API")
 api_router = APIRouter(prefix="/api")
 
+scheduler = AsyncIOScheduler(timezone="UTC")
 
-# -------- Models --------
+
+# -------- Helpers --------
 
 def slugify(value: str) -> str:
     value = value.lower().strip()
@@ -36,15 +43,16 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+# -------- Models --------
+
 class SignalBase(BaseModel):
     model_config = ConfigDict(extra="ignore")
     event_title: str
     category: str
     registration_count: int = 0
-    priority_score: int = 50  # 0-100
+    priority_score: int = 50
     source_url: Optional[str] = None
     notes: Optional[str] = None
-    # Conversion Engine fields
     lead_magnet_title: Optional[str] = None
     lead_magnet_description: Optional[str] = None
     paid_offer_title: Optional[str] = None
@@ -52,7 +60,7 @@ class SignalBase(BaseModel):
     paid_offer_price: Optional[float] = None
     cta_headline: Optional[str] = None
     cta_subtext: Optional[str] = None
-    status: str = "tracked"  # tracked | converting | live
+    status: str = "tracked"
 
 
 class SignalCreate(SignalBase):
@@ -87,8 +95,6 @@ class Signal(SignalBase):
     updated_at: str = Field(default_factory=now_iso)
 
 
-# -------- Helpers --------
-
 def derive_slugs(signal: dict) -> dict:
     if signal.get("lead_magnet_title"):
         signal["lead_magnet_slug"] = slugify(signal["lead_magnet_title"])
@@ -97,29 +103,7 @@ def derive_slugs(signal: dict) -> dict:
     return signal
 
 
-def generate_syllabus(signal: dict) -> List[dict]:
-    """Simulated syllabus generator. Builds 5 modules based on the signal."""
-    category = signal.get("category", "Career")
-    title = signal.get("paid_offer_title") or signal.get("event_title", "Course")
-    modules_template = [
-        ("Foundations & Market Context",
-         f"Decode the landscape behind '{title}'. Why now, who's hiring, and the signal strength from Leland data."),
-        ("Frameworks & Mental Models",
-         f"Operating principles used by top performers in {category}. Hands-on case dissection."),
-        ("Tactical Playbook",
-         f"Step-by-step execution. Templates, scripts, and checklists for {category} workflows."),
-        ("Live Reps & Simulations",
-         "Guided practice with feedback loops. Mock scenarios that mirror real high-stakes moments."),
-        ("Capstone & Launch Plan",
-         f"Ship a portfolio-grade artifact tied to '{title}'. 30/60/90-day execution roadmap."),
-    ]
-    return [
-        {"index": i + 1, "title": t, "summary": s, "duration_min": 45 + i * 10}
-        for i, (t, s) in enumerate(modules_template)
-    ]
-
-
-# -------- Routes --------
+# -------- Signal CRUD --------
 
 @api_router.get("/")
 async def root():
@@ -141,7 +125,7 @@ async def signal_stats():
     converting = sum(1 for d in docs if d.get("status") == "converting")
     live = sum(1 for d in docs if d.get("status") == "live")
     syllabi = sum(1 for d in docs if d.get("syllabus_generated"))
-    categories = {}
+    categories: dict = {}
     for d in docs:
         cat = d.get("category", "Uncategorized")
         categories[cat] = categories.get(cat, 0) + 1
@@ -152,7 +136,10 @@ async def signal_stats():
         "converting": converting,
         "live": live,
         "syllabi_generated": syllabi,
-        "categories": [{"name": k, "count": v} for k, v in sorted(categories.items(), key=lambda x: -x[1])],
+        "categories": [
+            {"name": k, "count": v}
+            for k, v in sorted(categories.items(), key=lambda x: -x[1])
+        ],
     }
 
 
@@ -201,7 +188,7 @@ async def trigger_syllabus(signal_id: str):
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
-    modules = generate_syllabus(existing)
+    modules = await generate_syllabus_ai(existing)
     updates = {
         "syllabus_generated": True,
         "syllabus_modules": modules,
@@ -214,9 +201,51 @@ async def trigger_syllabus(signal_id: str):
     return merged
 
 
+# -------- Scraper / Ingestion --------
+
+@api_router.post("/scraper/run")
+async def scraper_run():
+    """Trigger an immediate scrape of the Leland live listing."""
+    return await run_scrape(db, trigger="manual")
+
+
+@api_router.post("/scraper/ingest-html")
+async def scraper_ingest_html(payload: dict = Body(...)):
+    """Fallback ingestion: paste raw HTML (or stripped text) from Leland."""
+    html = (payload or {}).get("html", "")
+    if not html or len(html) < 50:
+        raise HTTPException(status_code=400, detail="html payload too small")
+    return await ingest_html(db, html, trigger="manual-paste")
+
+
+@api_router.get("/scraper/status")
+async def scraper_status():
+    last = await latest_run(db)
+    job = scheduler.get_job("leland_scrape") if scheduler.running else None
+    next_run = None
+    if job and job.next_run_time:
+        next_run = job.next_run_time.astimezone(timezone.utc).isoformat()
+    return {
+        "last_run": last,
+        "next_run_at": next_run,
+        "scheduler_running": scheduler.running,
+        "interval_hours": 12,
+    }
+
+
+@api_router.get("/scraper/runs")
+async def scraper_runs(limit: int = 20):
+    docs = (
+        await db.ingestion_runs.find({}, {"_id": 0})
+        .sort("ran_at", -1)
+        .to_list(min(max(limit, 1), 200))
+    )
+    return docs
+
+
 @api_router.post("/signals/seed")
 async def seed_signals():
-    """Seed with curated Leland-style signal data if collection empty."""
+    """Seed initial 7 curated Leland-style signals (idempotent)."""
     existing_count = await db.signals.count_documents({})
     if existing_count > 0:
         return {"seeded": False, "existing": existing_count}
@@ -363,18 +392,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def scheduled_scrape_job():
+    try:
+        result = await run_scrape(db, trigger="schedule")
+        logger.info("Scheduled scrape OK: %s", result)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Scheduled scrape failed: %s", e)
+
+
 @app.on_event("startup")
-async def auto_seed():
+async def on_startup():
     try:
         count = await db.signals.count_documents({})
         if count == 0:
             logger.info("Auto-seeding signals collection (empty).")
-            # Reuse the same logic
             await seed_signals()
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.exception("Auto-seed failed: %s", e)
+
+    # Schedule the 12h Leland scraper job (first run 12h from boot)
+    try:
+        from datetime import timedelta
+        first_run = datetime.now(timezone.utc) + timedelta(hours=12)
+        scheduler.add_job(
+            scheduled_scrape_job,
+            trigger=IntervalTrigger(hours=12),
+            id="leland_scrape",
+            replace_existing=True,
+            next_run_time=first_run,
+        )
+        scheduler.start()
+        logger.info(
+            "APScheduler started · leland_scrape every 12h · first run %s",
+            first_run.isoformat(),
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Scheduler start failed: %s", e)
 
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def on_shutdown():
+    try:
+        if scheduler.running:
+            scheduler.shutdown(wait=False)
+    finally:
+        client.close()

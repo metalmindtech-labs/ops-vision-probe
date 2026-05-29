@@ -1,8 +1,14 @@
 import { Button } from "@/components/ui/button";
-import { Plus, RefreshCw, Radar, Terminal } from "lucide-react";
+import { Plus, RefreshCw, Radar, Terminal, Satellite, Clipboard } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 
-export default function DashboardHeader({ onAdd, onRefresh }) {
+export default function DashboardHeader({
+    onAdd,
+    onRefresh,
+    onRunScraper,
+    onPasteHtml,
+    scraperBusy,
+}) {
     return (
         <header className="relative">
             <div className="flex items-start justify-between gap-6 flex-wrap">
@@ -33,7 +39,28 @@ export default function DashboardHeader({ onAdd, onRefresh }) {
                     </p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                        data-testid={DASHBOARD.pasteHtmlBtn}
+                        onClick={onPasteHtml}
+                        variant="outline"
+                        className="rounded-sm border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 font-mono text-xs uppercase tracking-wider"
+                    >
+                        <Clipboard className="h-3.5 w-3.5 mr-2" />
+                        Paste HTML
+                    </Button>
+                    <Button
+                        data-testid={DASHBOARD.runScraperBtn}
+                        onClick={onRunScraper}
+                        disabled={scraperBusy}
+                        variant="outline"
+                        className="rounded-sm border-lime-400/40 bg-lime-400/5 text-lime-300 hover:bg-lime-400/10 hover:text-lime-200 font-mono text-xs uppercase tracking-wider disabled:opacity-60"
+                    >
+                        <Satellite
+                            className={`h-3.5 w-3.5 mr-2 ${scraperBusy ? "animate-pulse" : ""}`}
+                        />
+                        {scraperBusy ? "Scraping…" : "Run Scraper"}
+                    </Button>
                     <Button
                         data-testid={DASHBOARD.refreshBtn}
                         onClick={onRefresh}

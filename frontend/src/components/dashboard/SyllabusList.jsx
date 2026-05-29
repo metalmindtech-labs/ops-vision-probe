@@ -1,4 +1,4 @@
-import { Clock } from "lucide-react";
+import { Clock, Target, Package } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 
 export default function SyllabusList({ modules }) {
@@ -7,10 +7,10 @@ export default function SyllabusList({ modules }) {
         <section data-testid={DASHBOARD.syllabusList}>
             <div className="flex items-center justify-between mb-3">
                 <h3 className="font-mono text-xs uppercase tracking-[0.25em] text-lime-400">
-                    04 · Generated Syllabus
+                    04 · AI-Generated Syllabus
                 </h3>
                 <span className="font-mono text-[10px] text-zinc-500">
-                    {modules.length} modules
+                    {modules.length} modules · claude sonnet 4.5
                 </span>
             </div>
             <div className="space-y-2">
@@ -36,6 +36,43 @@ export default function SyllabusList({ modules }) {
                                 <p className="mt-1 text-xs text-zinc-400 leading-relaxed">
                                     {m.summary}
                                 </p>
+
+                                {m.learning_objectives &&
+                                    m.learning_objectives.length > 0 && (
+                                        <div className="mt-3 space-y-1">
+                                            <div className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                                                <Target className="h-2.5 w-2.5" />
+                                                Objectives
+                                            </div>
+                                            <ul className="space-y-0.5">
+                                                {m.learning_objectives.map(
+                                                    (lo, i) => (
+                                                        <li
+                                                            key={i}
+                                                            className="text-[11px] text-zinc-300 pl-3 relative leading-relaxed"
+                                                        >
+                                                            <span className="absolute left-0 top-1.5 w-1 h-px bg-lime-400/60" />
+                                                            {lo}
+                                                        </li>
+                                                    )
+                                                )}
+                                            </ul>
+                                        </div>
+                                    )}
+
+                                {m.artifact && (
+                                    <div className="mt-2 flex items-start gap-1.5 border-t border-zinc-800/60 pt-2">
+                                        <Package className="h-3 w-3 text-lime-400 mt-0.5 shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                                                Artifact:{" "}
+                                            </span>
+                                            <span className="text-[11px] text-zinc-300">
+                                                {m.artifact}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

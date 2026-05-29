@@ -1,4 +1,5 @@
 import { ArrowUpRight } from "lucide-react";
+import { LEARNFORGE_URL } from "@/lib/learnforge";
 
 export default function LelandCTAStrip() {
     return (
@@ -11,7 +12,7 @@ export default function LelandCTAStrip() {
                 </span>
                 <h3 className="mt-3 font-mono text-lg text-zinc-50 leading-tight">
                     Push generated courses live on{" "}
-                    <span className="text-lime-400">LearnForge.com</span>
+                    <span className="text-lime-400">learnforge-core.vercel.app</span>
                 </h3>
                 <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
                     Every converted signal becomes a live course landing page,
@@ -19,7 +20,7 @@ export default function LelandCTAStrip() {
                     catalog.
                 </p>
                 <a
-                    href="https://learnforge.com"
+                    href={LEARNFORGE_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-4 inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-[0.2em] text-zinc-100 hover:text-lime-400 transition-colors group"

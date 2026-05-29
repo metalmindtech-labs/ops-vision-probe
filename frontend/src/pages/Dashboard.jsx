@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { SignalsAPI } from "@/lib/api";
+import { SignalsAPI, ScraperAPI } from "@/lib/api";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import StatGrid from "@/components/dashboard/StatGrid";
@@ -9,23 +9,30 @@ import SignalFormDialog from "@/components/dashboard/SignalFormDialog";
 import ConversionPanel from "@/components/dashboard/ConversionPanel";
 import LelandCTAStrip from "@/components/dashboard/LelandCTAStrip";
 import CategoryBreakdown from "@/components/dashboard/CategoryBreakdown";
+import ScraperStatusBar from "@/components/dashboard/ScraperStatusBar";
+import PasteHtmlDialog from "@/components/dashboard/PasteHtmlDialog";
 
 export default function Dashboard() {
     const [signals, setSignals] = useState([]);
     const [stats, setStats] = useState(null);
+    const [scraperStatus, setScraperStatus] = useState(null);
     const [loading, setLoading] = useState(true);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [conversionId, setConversionId] = useState(null);
+    const [pasteOpen, setPasteOpen] = useState(false);
+    const [scraperBusy, setScraperBusy] = useState(false);
 
     const refresh = async () => {
         try {
-            const [list, st] = await Promise.all([
+            const [list, st, scStatus] = await Promise.all([
                 SignalsAPI.list(),
                 SignalsAPI.stats(),
+                ScraperAPI.status().catch(() => null),
             ]);
             setSignals(list);
             setStats(st);
+            setScraperStatus(scStatus);
         } catch (e) {
             toast.error("Failed to load signals", {
                 description: e?.message ?? "Network error",
@@ -98,11 +105,47 @@ export default function Dashboard() {
         try {
             const updated = await SignalsAPI.triggerSyllabus(id);
             toast.success("Syllabus generated", {
-                description: `${updated.syllabus_modules.length} modules synthesized.`,
+                description: `${updated.syllabus_modules.length} modules synthesized by Claude Sonnet 4.5.`,
             });
             await refresh();
         } catch (e) {
             toast.error("Syllabus generation failed", {
+                description: e?.message,
+            });
+        }
+    };
+
+    const handleRunScraper = async () => {
+        setScraperBusy(true);
+        const t = toast.loading("Scraping Leland event-stream…", {
+            description: "Claude is classifying new signals.",
+        });
+        try {
+            const result = await ScraperAPI.run();
+            toast.success("Scrape complete", {
+                id: t,
+                description: `${result.discovered} discovered · ${result.created} new · ${result.updated} updated`,
+            });
+            await refresh();
+        } catch (e) {
+            toast.error("Scrape failed", { id: t, description: e?.message });
+        } finally {
+            setScraperBusy(false);
+        }
+    };
+
+    const handlePasteHtml = async (html) => {
+        const t = toast.loading("Parsing pasted HTML…");
+        try {
+            const result = await ScraperAPI.ingestHtml(html);
+            toast.success("HTML ingested", {
+                id: t,
+                description: `${result.discovered} events · ${result.created} new · ${result.updated} updated`,
+            });
+            await refresh();
+        } catch (e) {
+            toast.error("Paste ingest failed", {
+                id: t,
                 description: e?.message,
             });
         }
@@ -118,7 +161,12 @@ export default function Dashboard() {
                     <DashboardHeader
                         onAdd={handleCreate}
                         onRefresh={refresh}
+                        onRunScraper={handleRunScraper}
+                        onPasteHtml={() => setPasteOpen(true)}
+                        scraperBusy={scraperBusy}
                     />
+
+                    <ScraperStatusBar status={scraperStatus} />
 
                     <StatGrid stats={stats} loading={loading} />
 
@@ -153,6 +201,12 @@ export default function Dashboard() {
                 onOpenChange={(v) => !v && setConversionId(null)}
                 onSave={handleConversionSave}
                 onTriggerSyllabus={handleTriggerSyllabus}
+            />
+
+            <PasteHtmlDialog
+                open={pasteOpen}
+                onOpenChange={setPasteOpen}
+                onSubmit={handlePasteHtml}
             />
         </div>
     );

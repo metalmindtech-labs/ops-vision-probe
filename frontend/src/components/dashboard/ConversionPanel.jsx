@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Zap, Copy, ArrowUpRight, Sparkles } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
+import { learnforgeFreeUrl, learnforgePaidUrl } from "@/lib/learnforge";
 import CTAPreview from "@/components/dashboard/CTAPreview";
 import SyllabusList from "@/components/dashboard/SyllabusList";
 
@@ -81,8 +82,8 @@ export default function ConversionPanel({
         .trim()
         .replace(/\s+/g, "-");
 
-    const freeUrl = `https://learnforge.com/free/${leadSlug}`;
-    const paidUrl = `https://learnforge.com/forgecore/${paidSlug}`;
+    const freeUrl = learnforgeFreeUrl(leadSlug);
+    const paidUrl = learnforgePaidUrl(paidSlug);
 
     const copy = async (text, label) => {
         try {

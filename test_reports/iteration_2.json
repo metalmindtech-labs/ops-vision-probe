@@ -1,0 +1,34 @@
+{
+  "summary": "Iteration 2 testing complete for LearnForge Opportunity Radar — scheduled scraper, paste-HTML fallback, Claude Sonnet 4.5 syllabus generation, and learnforge-core.vercel.app URL refresh. Backend: 17/17 pytest cases passed (test_signals + test_scraper). Frontend: All required testids present, paste-HTML ingestion working end-to-end, live scrape executed (24 events discovered/updated), Claude syllabus generated exactly 6 modules with title/summary/Objectives/Artifact/duration, CTA chips point to learnforge-core.vercel.app/free/<slug> and /forgecore/<slug>, no learnforge.com leakage.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_signals.py",
+    "/app/backend/tests/test_scraper.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Run Scraper button transitions to 'Scraping…' state correctly but resolves so fast on duplicates (<1s) that strict UI-state polling can miss it. Functional correctness verified via toast + status-bar updates. No code change needed.",
+    "Test data cleanup: paste-html tests create signals with titles like 'Test … Pytest …'. The test_scraper.py auto-deletes its own; agent manually cleaned UI-created ones. Backend has no automatic TTL on signals collection, which is fine for current scope.",
+    "Scheduler is registered via APScheduler IntervalTrigger(hours=12) on startup. Verified next_run_at is ~12h in the future. No graceful-shutdown hook visible in server.py — minor (not blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_signals.py",
+    "/app/backend/tests/test_scraper.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "none required",
+  "seed_data_creation": "Tests create transient signals via /api/scraper/ingest-html with sample HTML; they are self-cleaned in test_scraper.py or removed post-run by the agent. No persistent seed mutation.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite at /app/backend/tests/{test_signals.py,test_scraper.py} fully green. test_scraper.py covers: scheduler status (interval=12h, next_run_at <=12h), ingest-html validation (400 on missing/<50 chars), happy-path ingest of the canonical sample blob ('Jun 1, 2026 at 9:00 PM 999 registered Test Event Title For Pytest Foo B. | 5.0 ( 10 ) Register') producing exactly 1 event with category+priority_score populated by Claude, ingestion-runs sorted desc with no Mongo _id leakage, and a tolerant live scrape that accepts discovered>=0. test_signals.py updated to expect 6 syllabus modules (was 5) and validates learning_objectives+artifact. Frontend manual flow verified end-to-end: paste-html-btn → paste-html-dialog → paste-html-input → paste-html-submit closes dialog and shows 'HTML ingested · N events · X new · Y updated' toast; run-scraper-btn toggles 'Scraping…' + emits 'Scrape complete' toast; convert sheet's cta-copy-free-btn/cta-copy-paid-btn show https://learnforge-core.vercel.app/free/<slug> and /forgecore/<slug>; trigger-syllabus-btn calls Claude Sonnet 4.5 in ~30-60s and renders syllabus-modules-list with exactly 6 modules each carrying Objectives + Artifact lines. No legacy 'learnforge.com' string present anywhere in DOM. Public Launch sidebar card uses learnforge-core.vercel.app. EMERGENT_LLM_KEY in /app/backend/.env powers the Claude calls successfully.",
+  "rca of the issue": "N/A — no bugs found."
+}

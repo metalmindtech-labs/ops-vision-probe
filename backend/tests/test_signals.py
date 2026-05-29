@@ -3,7 +3,7 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://course-converter-2.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
 
@@ -128,10 +128,13 @@ class TestCRUDFlow:
         d = r.json()
         assert d["syllabus_generated"] is True
         assert isinstance(d["syllabus_modules"], list)
-        assert len(d["syllabus_modules"]) == 5
+        assert len(d["syllabus_modules"]) == 6, f"Expected 6 modules, got {len(d['syllabus_modules'])}"
         m0 = d["syllabus_modules"][0]
-        for key in ["index", "title", "summary", "duration_min"]:
-            assert key in m0
+        for key in ["index", "title", "summary", "duration_min", "learning_objectives", "artifact"]:
+            assert key in m0, f"Missing key: {key}"
+        assert isinstance(m0["learning_objectives"], list)
+        assert isinstance(m0["artifact"], str)
+        assert isinstance(m0["duration_min"], int)
         # Status was already "converting"; should remain converting
         assert d["status"] in ("converting", "live")
 
