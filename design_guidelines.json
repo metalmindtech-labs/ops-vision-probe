@@ -1,0 +1,105 @@
+{
+  "project_name": "LearnForge Opportunity Radar",
+  "theme_and_archetype": {
+    "theme": "dark",
+    "archetype": "Archetype 7 (Electric & Neon) paired with Retro-Futurism Surface Strategy",
+    "vibe": "Command Center / Terminal Dashboard. Serious, data-dense, high-tech, actionable, and precise.",
+    "rules": [
+      "No generic soft shadows. Use sharp 1px borders, subtle light bleeds, and flat deep backgrounds.",
+      "Neon accents must be used strictly for functional highlights (CTAs, active states, priority signals), not decoration.",
+      "High contrast text for extreme readability."
+    ]
+  },
+  "colors": {
+    "background": {
+      "base": "bg-zinc-950",
+      "hex": "#09090b"
+    },
+    "surface": {
+      "default": "bg-zinc-900",
+      "elevated": "bg-zinc-800/50"
+    },
+    "border": {
+      "default": "border-zinc-800",
+      "accent": "border-lime-500/20",
+      "active": "border-lime-400"
+    },
+    "primary": {
+      "base": "bg-lime-400",
+      "hover": "bg-lime-500",
+      "text": "text-lime-400"
+    },
+    "text": {
+      "primary": "text-zinc-50",
+      "secondary": "text-zinc-400",
+      "muted": "text-zinc-500",
+      "inverse": "text-black"
+    }
+  },
+  "typography": {
+    "heading_font": "JetBrains Mono",
+    "body_font": "IBM Plex Sans",
+    "data_font": "JetBrains Mono",
+    "scales": {
+      "h1": "text-3xl sm:text-4xl tracking-tight font-bold",
+      "h2": "text-xl sm:text-2xl tracking-tight font-semibold",
+      "h3": "text-lg font-medium",
+      "body": "text-sm",
+      "overline": "text-xs uppercase tracking-[0.2em] font-medium text-lime-400"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_strategy": "MODE B: The Control Room Grid (Dense, Data Correlation). Base Grid: grid-cols-1 md:grid-cols-3 lg:grid-cols-4. Tight gap-4 or gap-6.",
+    "container_padding": "p-4 sm:p-6 lg:p-8",
+    "surface_treatment": "Cardless or flat cards with max 4px border-radius (rounded-sm) or sharp corners (rounded-none). No soft dropshadows. Use inner borders for definition.",
+    "alignment": "Strict left-alignment for data arrays, tabular structures. Strict geometric grids."
+  },
+  "components": {
+    "SignalTrackerTable": {
+      "description": "Dense table tracking high-demand signals.",
+      "styling_rules": "Use Shadcn Table. 1px row borders (border-zinc-800). Header text text-xs uppercase tracking-wider text-zinc-500. Row hover state: hover:bg-lime-400/5 transition-colors. Priority scores can use small neon dot indicators."
+    },
+    "ConversionEngine": {
+      "description": "Form section for defining Free Course and Paid Offer.",
+      "styling_rules": "Use Shadcn Forms/Inputs. Inputs should have bg-zinc-950, border-zinc-800, focus:border-lime-400 focus:ring-1 focus:ring-lime-400. Square edges or rounded-sm."
+    },
+    "CTAGenerator": {
+      "description": "Generates 'Leland-Style' banners for CTAs pointing to LearnForge.",
+      "styling_rules": "Use the provided abstract terminal/radar background images overlayed with text. High-contrast white/lime text on dark tech backgrounds."
+    },
+    "SyllabusButton": {
+      "description": "Action trigger to generate a syllabus.",
+      "styling_rules": "Primary CTA styling. bg-lime-400 text-black font-bold font-mono tracking-tight hover:bg-lime-500. Add a subtle phosphor icon (e.g., Lightning or Terminal window)."
+    }
+  },
+  "media": {
+    "radar_bg": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/c9d4ad82-ee78-430f-ba33-adadcbc6a8f0/images/385663c1db4f0a306684e7e0e6023d60f5ab334c785144af1cdc85dba294cc63.png",
+      "description": "Abstract cyber radar grid. Use for the main dashboard header background (with heavy dark overlay) or an empty state graphic."
+    },
+    "cta_banner_bg": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/c9d4ad82-ee78-430f-ba33-adadcbc6a8f0/images/4a2534d30c85ebdbcd6a97c742c3f3d16e8a1a300f16b232c076e3eab8c5edd1.png",
+      "description": "Sleek dark mode command center background. Use strictly for the CTA Generator preview banners."
+    },
+    "card_texture": {
+      "url": "https://static.prod-images.emergentagent.com/jobs/c9d4ad82-ee78-430f-ba33-adadcbc6a8f0/images/bb0d6a636167e0c14278939b2a57e32d7d8343216abd7b88f2292c9ff4563480.png",
+      "description": "Minimalist tech texture with faint grid lines. Use as a subtle background pattern for 'Conversion Engine' cards (bg-cover, very low opacity/blend mode)."
+    }
+  },
+  "iconography_and_motion": {
+    "icons": "Use @phosphor-icons/react. Select technical icons like Terminal, Radar, Lightning, ChartLineUp, Crosshair.",
+    "motion": "Fast, precise micro-interactions. hover:translate-x-1 on lists, sharp opacity fades. No slow easing."
+  },
+  "testing": {
+    "data_testid_rules": "All interactive elements MUST have a data-testid. Examples: `data-testid='signal-tracker-table'`, `data-testid='trigger-syllabus-btn'`, `data-testid='free-course-input'`."
+  },
+  "instructions_to_main_agent": [
+    "Install JetBrains Mono and IBM Plex Sans from Google Fonts via CSS @import in index.css.",
+    "Install @phosphor-icons/react and lucide-react for iconography.",
+    "Set up Tailwind config to include the lime-400 and zinc-900 palette.",
+    "Build the Signal Tracker as a dense table. Integrate standard Shadcn UI components for the Conversion Engine inputs.",
+    "Build a preview card for the CTA generator using 'cta_banner_bg' image.",
+    "Ensure dark mode is locked in (e.g. `dark` class forced on root or body).",
+    "Do NOT use Space Grotesk or generic SaaS soft shadows."
+  ]
+}
