@@ -27,21 +27,31 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 - Generated syllabus list rendered inside the sheet after generation.
 - Tested 100% (backend pytest + frontend Playwright E2E).
 
+## Implemented (2026-02-29 — v2: Scrape → Signal → Syllabus pipeline)
+- **Live Leland scraper** (`services/scraper.py`): httpx + BeautifulSoup + regex extracts event title, registration count, when, coach, rating from joinleland.com/events SSR HTML.
+- **APScheduler** (12-hour IntervalTrigger) on FastAPI startup. New routes: `POST /api/scraper/run`, `POST /api/scraper/ingest-html` (paste-fallback), `GET /api/scraper/status`, `GET /api/scraper/runs`.
+- **Claude Sonnet 4.5** (`claude-sonnet-4-5-20250929`) via `emergentintegrations`:
+  - `enrich_signal()` — classifies each new event into category + priority_score (0–100) + suggested lead-magnet/paid-offer titles.
+  - `generate_syllabus_ai()` — produces 6-module syllabi with `learning_objectives` and `artifact` per module.
+- **Ingestion runs** tracked in `ingestion_runs` Mongo collection.
+- Frontend: scraper status bar (online indicator, last-run delta, next-run ETA), Run Scraper + Paste HTML controls in header, redesigned syllabus list rendering Objectives + Artifact, all CTAs now point to `https://learnforge-core.vercel.app` via centralized `lib/learnforge.js`.
+- Tested 100% (17/17 backend pytest + frontend E2E).
+
 ## Prioritized Backlog
 ### P1
-- Leland event-stream auto-ingest (live scraper or scheduled job).
-- AI-powered syllabus generation (swap in `emergentintegrations` Claude/GPT) gated behind a feature flag.
 - Multi-tenant auth (so additional architects can collaborate).
+- Diff-aware ingestion: surface when a signal's registration count jumps >20% so the Architect knows demand is accelerating.
 
 ### P2
 - CSV / Notion export of converted signals.
 - Conversion funnel analytics (free → paid attribution).
-- Bulk priority recalculation based on registration deltas over time.
-- Public LearnForge course landing page generation (mirror the dashboard CTA preview).
+- "Publish to LearnForge" webhook → posts the generated syllabus + CTA to learnforge-core.vercel.app.
+- Per-category dashboards.
+- Streaming syllabus generation UI (token-by-token).
 
 ### P3
-- Dark-mode-only locked, but consider a high-contrast monochrome variant.
-- Per-category dashboards.
+- High-contrast monochrome variant.
+- Slack / email alert on a new high-priority (≥90) signal.
 
 ## Test Credentials
 N/A — no authentication.
