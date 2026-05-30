@@ -183,8 +183,8 @@ export default function SignalVelocityChart() {
                 )}
                 {!loading && merged.length > 0 && (
                     <>
-                        <div className="h-72 -ml-2">
-                            <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-72 -ml-2" style={{ minHeight: 288 }}>
+                            <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={260}>
                                 <LineChart
                                     data={merged}
                                     margin={{ top: 8, right: 16, bottom: 0, left: 0 }}

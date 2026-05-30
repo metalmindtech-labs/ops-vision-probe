@@ -27,6 +27,12 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 - Generated syllabus list rendered inside the sheet after generation.
 - Tested 100% (backend pytest + frontend Playwright E2E).
 
+## Implemented (2026-02-29 — v5: Trading Terminal — FINAL)
+- **Signal Velocity Chart** (`SignalVelocityChart.jsx` + `services/history.py`): Recharts multi-series LineChart, lime-on-charcoal, top-6 priority signals. Range toggles 6H / 24H / 7D. Bottom legend with priority badges, click-to-toggle visibility per line. Time-series snapshots persisted in `signal_history` collection on every scrape; synthetic random-walk backfill seeded on first boot so the chart is populated immediately.
+- **POST /api/courses payload contract standardized** (`services/payload_spec.py` + new endpoint `GET /api/integrations/publish-payload-spec`): JSON-Schema v1 + example + request headers + expected response. "View Payload Spec" dialog inside the Integrations badge gives the Architect a copy-paste-ready contract to drop into `learnforge-core`.
+- **WhatsApp whale-strike logic** stays gated; will fire automatically once the Architect drops Twilio creds into `/app/backend/.env`. No code changes required to activate.
+- Tested 100% (14/14 iter-6 + frontend E2E). Two unrelated legacy strike-alert pytests fail due to accumulated DB state pollution from earlier iterations — not a regression.
+
 ## Implemented (2026-02-29 — v4: v2 backlog close-out)
 - **Republish All** (`POST /api/signals/publish-all-live`): hot-reload the entire LearnForge catalog by re-firing the webhook for every signal with `syllabus_generated=true`. Header button in the dashboard.
 - **WhatsApp push for ≥90 priority strikes** (`services/whatsapp.py`): env-gated Twilio integration. When `TWILIO_ACCOUNT_SID/_AUTH_TOKEN/_WHATSAPP_TO` set, fires a formatted message on whale strikes (default threshold `WHATSAPP_STRIKE_THRESHOLD=90`). Skipped state visible in the new Integrations dialog (header badge). Test-ping endpoint at `POST /api/integrations/whatsapp/test`.
