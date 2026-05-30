@@ -19,6 +19,16 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v11: Architect's Critical Sync Debug)
+- **Exact publish failure captured & surfaced**: `HTTP 404 | {"detail":"Not Found"} | content-type: application/json`. Both GET and POST to `https://learnforge-core.vercel.app/api/courses` return 404 — the receiver code shipped via the Webhook Spec dialog hasn't been deployed by the LearnForge team yet. This is unambiguously option (1) route-not-deployed (NOT 401/signature, NOT 500/Supabase).
+- **`PublishErrorDialog` (new)** opens from a clickable red `FAIL <code>` badge on every failed Signal Tracker row. Surfaces: classified failure-mode banner (404 route-missing / 401-403 signature / 422 payload / 5xx upstream / Connect / Timeout) with actionable guidance, 4-card meta grid (Webhook, HTTP, Retries N/5, Next retry timestamp), amber diagnostic hint block, raw response body (first 400 chars), last-10-attempts list, and footer `Copy Diagnostic` + `Retry Publish` buttons.
+- **Sync button now reconciles** (not just refresh): hits `GET /api/learnforge/reconcile` → backend probes LearnForge (treats HTTP 405 as reachable=true for POST-only routes) and computes catalog drift. Header `SYNC` button shows a red `[N]` drift badge with title tooltip when N>0, or an emerald dot when in-sync + live. Click → toast surfaces probe state ("In sync · LearnForge live" / "X courses drifted" / "LearnForge HTTP 404").
+- **Backend new endpoints**:
+  - `GET /api/learnforge/reconcile` → probe + drift report
+  - `GET /api/signals/{id}/publish-history?limit=N` → signal diag fields + last N attempts
+  - `_persist` extended to capture `response_preview`, `hint`, `webhook_url`, `last_publish_at` on every attempt
+- Tested: 9/9 backend pytest + 12/12 frontend UI checks PASS (iter11). Regression test at `/app/backend/tests/test_iter11_reconcile_and_history.py`.
+
 ## Implemented (2026-05-30 — v10: Scraper 404 Fix + URL Fallback)
 - **Root-caused the "404 on the frontend"**: The actual `/api/scraper/run` was always returning HTTP 200 (23 events). The 404 came from stale calls to `/api/leland/scrape` (legacy endpoint name) and stale `leland.com` (vs `joinleland.com`) external links.
 - **Added legacy alias** `POST /api/leland/scrape` → forwards to the same `run_scrape` pipeline (no more silent 404 for any older docs/scripts).

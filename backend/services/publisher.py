@@ -333,13 +333,18 @@ async def reconcile_with_learnforge(db) -> dict:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(webhook, headers={"User-Agent": "LearnForge-OpportunityRadar/1.0"})
         probe["status_code"] = resp.status_code
-        probe["reachable"] = 200 <= resp.status_code < 300
-        if probe["reachable"]:
+        # 2xx → live. 405 Method Not Allowed → route exists but doesn't
+        # accept GET (LearnForge may only implement POST). Treat as reachable.
+        probe["reachable"] = (200 <= resp.status_code < 300) or resp.status_code == 405
+        if 200 <= resp.status_code < 300:
             try:
                 body = resp.json()
                 probe["service"] = body.get("service")
             except Exception:  # noqa: BLE001
                 probe["service"] = None
+        elif resp.status_code == 405:
+            probe["service"] = "learnforge-course-publish (POST-only)"
+            probe["error"] = "HTTP 405 (route exists, GET not allowed)"
         else:
             probe["error"] = f"HTTP {resp.status_code}"
     except httpx.ConnectError as e:
