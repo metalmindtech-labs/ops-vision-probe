@@ -86,6 +86,7 @@ class SignalBase(BaseModel):
     paid_offer_title: Optional[str] = None
     paid_offer_description: Optional[str] = None
     paid_offer_price: Optional[float] = None
+    paid_offer_original_price: Optional[float] = None
     cta_headline: Optional[str] = None
     cta_subtext: Optional[str] = None
     status: str = "tracked"
@@ -108,6 +109,7 @@ class SignalUpdate(BaseModel):
     paid_offer_title: Optional[str] = None
     paid_offer_description: Optional[str] = None
     paid_offer_price: Optional[float] = None
+    paid_offer_original_price: Optional[float] = None
     cta_headline: Optional[str] = None
     cta_subtext: Optional[str] = None
     status: Optional[str] = None

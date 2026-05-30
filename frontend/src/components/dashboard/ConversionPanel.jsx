@@ -26,6 +26,39 @@ import { PublishAPI } from "@/lib/api";
 import useSyllabusStream from "@/hooks/useSyllabusStream";
 import CTAPreview from "@/components/dashboard/CTAPreview";
 import SyllabusList from "@/components/dashboard/SyllabusList";
+import { computeDiscountPct, formatUsd } from "@/lib/pricing";
+
+function DiscountPreview({ current, original }) {
+    const pct = computeDiscountPct(current, original);
+    if (pct === null) {
+        return (
+            <div className="h-10 flex items-center px-3 rounded-sm border border-dashed border-zinc-800 font-mono text-[11px] text-zinc-600">
+                set anchor & price
+            </div>
+        );
+    }
+    if (pct <= 0) {
+        return (
+            <div className="h-10 flex items-center px-3 rounded-sm border border-zinc-800 font-mono text-[11px] text-zinc-400">
+                no discount — price ≥ anchor
+            </div>
+        );
+    }
+    return (
+        <div
+            data-testid="discount-preview-badge"
+            className="h-10 flex items-center justify-between px-3 rounded-sm border border-lime-400/40 bg-lime-400/10"
+        >
+            <span className="font-mono text-base font-bold text-lime-300">
+                {pct}% OFF
+            </span>
+            <span className="font-mono text-[10px] text-zinc-500">
+                <span className="line-through">{formatUsd(original)}</span> →{" "}
+                <span className="text-zinc-200">{formatUsd(current)}</span>
+            </span>
+        </div>
+    );
+}
 
 export default function ConversionPanel({
     signal,
@@ -56,6 +89,7 @@ export default function ConversionPanel({
                 paid_offer_title: signal.paid_offer_title || "",
                 paid_offer_description: signal.paid_offer_description || "",
                 paid_offer_price: signal.paid_offer_price ?? "",
+                paid_offer_original_price: signal.paid_offer_original_price ?? "",
                 cta_headline: signal.cta_headline || "",
                 cta_subtext: signal.cta_subtext || "",
                 status: signal.status || "tracked",
@@ -73,6 +107,10 @@ export default function ConversionPanel({
             ...form,
             paid_offer_price:
                 form.paid_offer_price === "" ? null : Number(form.paid_offer_price),
+            paid_offer_original_price:
+                form.paid_offer_original_price === ""
+                    ? null
+                    : Number(form.paid_offer_original_price),
         });
         setSaving(false);
     };
@@ -291,6 +329,36 @@ export default function ConversionPanel({
                                         />
                                     </div>
                                 </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <Label className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                                            Anchor / Original Price (USD)
+                                        </Label>
+                                        <Input
+                                            data-testid="paid-offer-original-price"
+                                            type="number"
+                                            min={0}
+                                            value={form.paid_offer_original_price}
+                                            onChange={(e) =>
+                                                set(
+                                                    "paid_offer_original_price",
+                                                    e.target.value
+                                                )
+                                            }
+                                            placeholder="1899"
+                                            className="bg-zinc-900 border-zinc-800 focus:border-lime-400 focus-visible:ring-1 focus-visible:ring-lime-400 rounded-sm font-mono text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                                            Discount preview
+                                        </Label>
+                                        <DiscountPreview
+                                            current={form.paid_offer_price}
+                                            original={form.paid_offer_original_price}
+                                        />
+                                    </div>
+                                </div>
                                 <div className="space-y-1.5">
                                     <Label className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500">
                                         Description
@@ -363,6 +431,8 @@ export default function ConversionPanel({
                                     }
                                     paidUrl={paidUrl}
                                     freeUrl={freeUrl}
+                                    price={form.paid_offer_price}
+                                    originalPrice={form.paid_offer_original_price}
                                 />
                             </div>
 

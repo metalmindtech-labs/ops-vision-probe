@@ -19,6 +19,20 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v16: Slam Offer Discount Math)
+- **Canonical discount formula** lives in two mirrored places kept in lockstep:
+  - Backend: `services/publisher.compute_discount_pct(current, original)`
+  - Frontend: `lib/pricing.computeDiscountPct(current, original)`
+  - Both implement `round(((orig - current) / orig) * 100)` exactly; edge-cases return `null`/`None` (missing price, original ≤ 0, negative current) or `0` (current ≥ original).
+- **Signal model + DB**: new `paid_offer_original_price: Optional[float]` field on `SignalBase` + `SignalUpdate`. The Conversion sheet now has an "Anchor / Original Price (USD)" input with a live `DiscountPreview` badge alongside (`<line-through>$1,899</line-through> → $1,000  ·  47% OFF`).
+- **CTAPreview enhanced** — the public-facing CTA card now renders the `discount_pct` chip at top-right + a `$1,000` price with `$1,899` strike-through anchor when both are set. Same testid (`cta-preview-discount-badge`) so LearnForge's design QA can match.
+- **Webhook payload upgraded**: ships top-level `original_price_usd` + `discount_pct` (rounded integer), plus the mirrored values inside `course.original_price_usd` / `course.discount_pct`. LearnForge no longer has to compute anything — they just render `discount_pct` directly.
+- **Acceptance tests passed** (verbatim from the Architect's directive):
+  - `$1,000` against `$1,899` anchor → **47% OFF** ✓
+  - `$49` against `$1,000` anchor → **95% OFF** ✓
+  - Edge cases handled: missing/zero anchor, current ≥ anchor, negative inputs.
+- **Live verified**: updated signal `e3171073-…` with anchor=$1899, current=$1000 → publish returned `HTTP 200 "Course upserted successfully"`, fields now live on LearnForge.
+
 ## Implemented (2026-05-30 — v15: Fal.ai Flux.1 Pro Visual Engine + FIRST GREEN LIVE PUBLISH 🟢)
 - **`FAL_KEY` injected** into `/app/backend/.env`.
 - **New service `services/visuals.py`** powered by `fal_client` (v1.0.0, added to requirements.txt). Calls `fal-ai/flux-pro/v1.1` with the **Sovereign Style Sheet** suffix (dark mode, cinematic, high-contrast, charcoal/obsidian + cyber lime accents, 8K, no AI-slop tokens, no text/logos). Builds one prompt for the course hero + one per syllabus module; dispatches all 7 with bounded concurrency (3) and graceful per-image error capture.

@@ -29,6 +29,33 @@ def _webhook_secret() -> Optional[str]:
     return s or None
 
 
+def compute_discount_pct(
+    current_price: Optional[float], original_price: Optional[float]
+) -> Optional[int]:
+    """Canonical 'Slam Offer' discount calculation.
+
+    Formula: round(((original - current) / original) * 100)
+    Edge cases:
+      - either price missing → None
+      - original_price <= 0 → None
+      - current_price >= original_price → 0
+      - current_price < 0 → None (invalid)
+    """
+    if current_price is None or original_price is None:
+        return None
+    try:
+        cur = float(current_price)
+        orig = float(original_price)
+    except (TypeError, ValueError):
+        return None
+    if orig <= 0 or cur < 0:
+        return None
+    if cur >= orig:
+        return 0
+    pct = ((orig - cur) / orig) * 100
+    return int(round(pct))
+
+
 def sign_payload(secret: str, body_bytes: bytes) -> str:
     """HMAC-SHA256 of the raw JSON body using the shared secret.
 
@@ -81,12 +108,18 @@ def build_payload(signal: dict) -> dict:
     and `modules` (renamed from the previous nested `syllabus.modules`).
     We also keep the rich nested `course` object for full-fidelity
     downstream consumers and our own debug visibility.
+
+    Discount math: `discount_pct = round(((orig - current) / orig) * 100)`.
+    Computed server-side so every consumer renders the same number.
     """
     paid_slug = signal.get("paid_offer_slug") or signal.get("lead_magnet_slug")
     free_slug = signal.get("lead_magnet_slug")
     title = signal.get("paid_offer_title") or signal.get("event_title")
     modules = signal.get("syllabus_modules") or []
     hero_image_url = signal.get("hero_image_url")
+    price_usd = signal.get("paid_offer_price")
+    original_price_usd = signal.get("paid_offer_original_price")
+    discount_pct = compute_discount_pct(price_usd, original_price_usd)
     return {
         # ---- Top-level fields LearnForge's receiver validates ----
         "event": "course.publish",
@@ -97,7 +130,9 @@ def build_payload(signal: dict) -> dict:
         "modules": modules,
         "category": signal.get("category"),
         "summary": signal.get("paid_offer_description") or "",
-        "price_usd": signal.get("paid_offer_price"),
+        "price_usd": price_usd,
+        "original_price_usd": original_price_usd,
+        "discount_pct": discount_pct,
         "registration_count": signal.get("registration_count") or 0,
         "priority_score": signal.get("priority_score") or 0,
         "source_url": signal.get("source_url"),
@@ -116,7 +151,9 @@ def build_payload(signal: dict) -> dict:
             "title": title,
             "category": signal.get("category"),
             "summary": signal.get("paid_offer_description") or "",
-            "price_usd": signal.get("paid_offer_price"),
+            "price_usd": price_usd,
+            "original_price_usd": original_price_usd,
+            "discount_pct": discount_pct,
             "hero_image_url": hero_image_url,
             "lead_magnet": {
                 "title": signal.get("lead_magnet_title") or "",
