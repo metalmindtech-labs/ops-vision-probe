@@ -392,13 +392,20 @@ function LearnForgeHandoffCallout({ webhookUrl }) {
                     <p className="font-mono text-[11px] text-zinc-400 mt-1 leading-relaxed">
                         Radar is sending the canonical{" "}
                         <span className="text-zinc-200">course.publish</span>{" "}
-                        payload — but{" "}
+                        payload signed with{" "}
+                        <span className="text-lime-300">HMAC-SHA256</span>. If
+                        publishes are still landing in{" "}
+                        <span className="text-red-300">401 Invalid signature</span>{" "}
+                        or{" "}
+                        <span className="text-red-300">404 Not Found</span>,
+                        send this drop-in spec to the LearnForge team — the
+                        receiver code in there matches our exact signing
+                        scheme, so publishes flip to 200 the moment they
+                        deploy + set{" "}
                         <span className="font-mono text-amber-300">
-                            POST {webhookUrl || "/api/courses"}
+                            LEARNFORGE_WEBHOOK_SECRET
                         </span>{" "}
-                        is still returning 404. Send this drop-in spec to the
-                        LearnForge team and publishes flip from 404 → 200 as
-                        soon as the route deploys.
+                        to the same value as Radar's env.
                     </p>
                 </div>
             </div>

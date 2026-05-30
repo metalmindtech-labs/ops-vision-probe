@@ -19,6 +19,18 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v12: HMAC-SHA256 Webhook Signing)
+- **Set `LEARNFORGE_WEBHOOK_SECRET=SovereignForge2026!`** in `/app/backend/.env`.
+- **HMAC-SHA256 signing**: `publisher.sign_payload()` computes `hmac.new(secret, body_bytes, sha256).hexdigest()` over a canonical JSON body (`json.dumps(payload, separators=(',', ':'), sort_keys=True)`). The exact same byte string is POSTed via `httpx.AsyncClient.post(..., content=body_bytes)` so the receiver's HMAC over the raw body always matches.
+- **Headers attached when secret is present**:
+  - `X-Radar-Signature: sha256=<64-hex>` (71 chars)
+  - `X-Radar-Signature-Algorithm: hmac-sha256`
+- **`/api/integrations/status`** now exposes `signature_algorithm` + `signature_header` alongside `has_secret`.
+- **IntegrationsBadge UI**: `Signing secret: ENABLED` in lime (`webhook-signing-status` testid). When enabled the dialog also shows `· hmac-sha256 → X-Radar-Signature`. Handoff callout text updated — no longer claims "404 → 200"; now reflects the 401-Invalid-signature state and points to the deploy + matching-secret remediation.
+- **Receiver TS code (`/app/docs/learnforge_receiver_route.ts`) updated** to verify HMAC-SHA256 over the raw request body (reads `req.text()` first, then JSON-parses), constant-time compares with `crypto.timingSafeEqual`. Stays in lockstep with Radar's signing scheme.
+- **Live LearnForge endpoint progressed 404 → 401**: `{"error":"Invalid signature"}` — proves the receiver route IS deployed; the only remaining gap is LearnForge's `LEARNFORGE_WEBHOOK_SECRET` env var must be set to the same `SovereignForge2026!` value.
+- Tested: 8/8 backend pytest PASS (status metadata, sign_payload stdlib equivalence, end-to-end via local 127.0.0.1 echo server validating receiver-side HMAC verification, live 401 assertion) + frontend Playwright PASS. Regression at `/app/backend/tests/test_iter12_hmac_signing.py`.
+
 ## Implemented (2026-05-30 — v11: Architect's Critical Sync Debug)
 - **Exact publish failure captured & surfaced**: `HTTP 404 | {"detail":"Not Found"} | content-type: application/json`. Both GET and POST to `https://learnforge-core.vercel.app/api/courses` return 404 — the receiver code shipped via the Webhook Spec dialog hasn't been deployed by the LearnForge team yet. This is unambiguously option (1) route-not-deployed (NOT 401/signature, NOT 500/Supabase).
 - **`PublishErrorDialog` (new)** opens from a clickable red `FAIL <code>` badge on every failed Signal Tracker row. Surfaces: classified failure-mode banner (404 route-missing / 401-403 signature / 422 payload / 5xx upstream / Connect / Timeout) with actionable guidance, 4-card meta grid (Webhook, HTTP, Retries N/5, Next retry timestamp), amber diagnostic hint block, raw response body (first 400 chars), last-10-attempts list, and footer `Copy Diagnostic` + `Retry Publish` buttons.
