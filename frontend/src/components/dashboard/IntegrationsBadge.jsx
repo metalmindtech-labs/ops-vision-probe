@@ -16,6 +16,8 @@ import {
     XCircle,
     Webhook,
     KeyRound,
+    FileJson,
+    Copy,
 } from "lucide-react";
 import { IntegrationsAPI } from "@/lib/api";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
@@ -23,6 +25,8 @@ import { DASHBOARD } from "@/constants/testIds/dashboard";
 export default function IntegrationsBadge({ status, onRefresh }) {
     const [open, setOpen] = useState(false);
     const [testing, setTesting] = useState(false);
+    const [specOpen, setSpecOpen] = useState(false);
+    const [spec, setSpec] = useState(null);
     const wa = status?.whatsapp;
     const wh = status?.publish_webhook;
 
@@ -175,6 +179,26 @@ export default function IntegrationsBadge({ status, onRefresh }) {
                                     </span>
                                 </div>
                             </div>
+                            <Button
+                                data-testid={DASHBOARD.payloadSpecBtn}
+                                onClick={async () => {
+                                    setSpecOpen(true);
+                                    if (!spec) {
+                                        try {
+                                            const s = await IntegrationsAPI.publishSpec();
+                                            setSpec(s);
+                                        } catch (e) {
+                                            toast.error("Failed to load spec");
+                                        }
+                                    }
+                                }}
+                                size="sm"
+                                variant="outline"
+                                className="rounded-sm border-lime-400/40 bg-lime-400/5 text-lime-300 hover:bg-lime-400/10 hover:text-lime-200 font-mono text-[10px] uppercase tracking-wider mt-2"
+                            >
+                                <FileJson className="h-3 w-3 mr-1.5" />
+                                View Payload Spec
+                            </Button>
                         </div>
                     </div>
 
@@ -189,6 +213,121 @@ export default function IntegrationsBadge({ status, onRefresh }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <PayloadSpecDialog open={specOpen} onOpenChange={setSpecOpen} spec={spec} />
         </>
+    );
+}
+
+function PayloadSpecDialog({ open, onOpenChange, spec }) {
+    const copyExample = async () => {
+        try {
+            await navigator.clipboard.writeText(
+                JSON.stringify(spec?.example, null, 2)
+            );
+            toast.success("Example payload copied");
+        } catch {
+            toast.error("Copy failed");
+        }
+    };
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent
+                data-testid={DASHBOARD.payloadSpecDialog}
+                className="bg-zinc-950 border border-zinc-800 rounded-sm text-zinc-50 max-w-3xl max-h-[90vh] overflow-y-auto"
+            >
+                <DialogHeader>
+                    <DialogTitle className="font-mono uppercase tracking-[0.2em] text-sm text-lime-400 flex items-center gap-2">
+                        <FileJson className="h-3.5 w-3.5" />
+                        POST /api/courses Payload Contract (v1)
+                    </DialogTitle>
+                    <DialogDescription className="text-zinc-400 text-xs">
+                        Stable JSON schema for the LearnForge publish webhook.
+                        Paste this into your{" "}
+                        <span className="font-mono text-zinc-200">learnforge-core</span>{" "}
+                        FastAPI handler.
+                    </DialogDescription>
+                </DialogHeader>
+
+                {!spec && (
+                    <div className="font-mono text-[11px] text-zinc-500 py-8 text-center">
+                        loading spec…
+                    </div>
+                )}
+                {spec && (
+                    <div className="space-y-4 mt-2">
+                        <section>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400">
+                                    Endpoint
+                                </h4>
+                            </div>
+                            <pre className="border border-zinc-800 bg-zinc-900/50 rounded-sm p-3 font-mono text-[11px] text-lime-400 overflow-x-auto">
+                                POST {spec.webhook_url || "<configure LEARNFORGE_WEBHOOK_URL>"}
+                            </pre>
+                        </section>
+
+                        <section>
+                            <h4 className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400 mb-2">
+                                Request Headers
+                            </h4>
+                            <pre className="border border-zinc-800 bg-zinc-900/50 rounded-sm p-3 font-mono text-[11px] text-zinc-300 overflow-x-auto">
+{Object.entries(spec.request_headers || {})
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("\n")}
+                            </pre>
+                        </section>
+
+                        <section>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400">
+                                    Example Payload
+                                </h4>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={copyExample}
+                                    className="h-6 rounded-sm font-mono text-[10px] uppercase tracking-wider text-zinc-400 hover:text-lime-400 hover:bg-zinc-800"
+                                >
+                                    <Copy className="h-3 w-3 mr-1" />
+                                    Copy
+                                </Button>
+                            </div>
+                            <pre className="border border-zinc-800 bg-zinc-900/50 rounded-sm p-3 font-mono text-[11px] text-zinc-300 overflow-x-auto max-h-72">
+                                {JSON.stringify(spec.example, null, 2)}
+                            </pre>
+                        </section>
+
+                        <section>
+                            <h4 className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400 mb-2">
+                                Expected Response
+                            </h4>
+                            <pre className="border border-zinc-800 bg-zinc-900/50 rounded-sm p-3 font-mono text-[11px] text-zinc-300 overflow-x-auto">
+                                {JSON.stringify(spec.expected_response, null, 2)}
+                            </pre>
+                        </section>
+
+                        <section>
+                            <h4 className="font-mono text-[10px] uppercase tracking-[0.25em] text-zinc-400 mb-2">
+                                JSON Schema
+                            </h4>
+                            <pre className="border border-zinc-800 bg-zinc-900/50 rounded-sm p-3 font-mono text-[11px] text-zinc-300 overflow-x-auto max-h-72">
+                                {JSON.stringify(spec.schema, null, 2)}
+                            </pre>
+                        </section>
+                    </div>
+                )}
+
+                <DialogFooter>
+                    <Button
+                        variant="ghost"
+                        onClick={() => onOpenChange(false)}
+                        className="rounded-sm font-mono text-xs uppercase tracking-wider text-zinc-400 hover:text-zinc-50 hover:bg-zinc-800"
+                    >
+                        Close
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

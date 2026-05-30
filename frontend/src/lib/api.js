@@ -67,6 +67,17 @@ export const IntegrationsAPI = {
         client
             .post(`/integrations/whatsapp/test`, null, { timeout: 30000 })
             .then((r) => r.data),
+    publishSpec: () =>
+        client.get(`/integrations/publish-payload-spec`).then((r) => r.data),
+};
+
+export const VelocityAPI = {
+    get: ({ hours = 24, limit = 6, ids = null } = {}) =>
+        client
+            .get(`/signals/velocity`, {
+                params: { hours, limit, ...(ids ? { ids } : {}) },
+            })
+            .then((r) => r.data),
 };
 
 export const syllabusStreamUrl = (id) =>

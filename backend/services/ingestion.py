@@ -19,6 +19,7 @@ from services.scraper import (
 )
 from services.ai import enrich_signal
 from services.alerts import is_strike, record_strike
+from services.history import record_history
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +66,14 @@ async def ingest_events(
                     )
                 await db.signals.update_one(
                     {"event_title": ev.event_title}, {"$set": patch}
+                )
+                await record_history(
+                    db,
+                    signal_id=existing["id"],
+                    registration_count=new_count,
+                    priority_score=patch.get(
+                        "priority_score", existing.get("priority_score") or 0
+                    ),
                 )
                 # Strike detection: surge alert
                 if is_strike(old_count, ev.registration_count):
@@ -123,6 +132,12 @@ async def ingest_events(
                 "last_seen_at": _now(),
             }
             await db.signals.insert_one(doc)
+            await record_history(
+                db,
+                signal_id=doc["id"],
+                registration_count=doc["registration_count"],
+                priority_score=doc["priority_score"],
+            )
             created += 1
         except Exception as e:  # noqa: BLE001
             logger.exception("ingest error for %s: %s", ev.event_title, e)

@@ -27,6 +27,13 @@ from services.publisher import (
 )
 from services.alerts import list_alerts, ack_alert, ack_all
 from services.whatsapp import get_status as whatsapp_status, send_whatsapp
+from services.history import get_velocity, backfill_synthetic, history_count
+from services.payload_spec import (
+    PUBLISH_PAYLOAD_SPEC,
+    PUBLISH_PAYLOAD_EXAMPLE,
+    HEADERS_SPEC,
+    EXPECTED_RESPONSE,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -132,6 +139,21 @@ async def root():
 async def list_signals():
     docs = await db.signals.find({}, {"_id": 0}).sort("priority_score", -1).to_list(1000)
     return docs
+
+
+@api_router.get("/signals/velocity")
+async def signals_velocity(hours: int = 24, limit: int = 6, ids: Optional[str] = None):
+    """Return time-series snapshots for the top-N signals.
+
+    Query params:
+      - hours: lookback window (default 24, max 168)
+      - limit: number of signals (default 6, max 12)
+      - ids: optional comma-separated signal IDs (overrides ranking)
+    """
+    hours = max(1, min(int(hours), 168))
+    limit = max(1, min(int(limit), 12))
+    signal_ids = [s for s in (ids or "").split(",") if s] if ids else None
+    return await get_velocity(db, signal_ids=signal_ids, hours=hours, limit_signals=limit)
 
 
 @api_router.get("/signals/stats")
@@ -334,6 +356,20 @@ async def integrations_whatsapp_test():
     )
     return result
 
+
+@api_router.get("/integrations/publish-payload-spec")
+async def integrations_publish_spec():
+    """Stable JSON-Schema contract for LearnForge POST /api/courses ingestion."""
+    return {
+        "schema": PUBLISH_PAYLOAD_SPEC,
+        "example": PUBLISH_PAYLOAD_EXAMPLE,
+        "request_headers": HEADERS_SPEC,
+        "expected_response": EXPECTED_RESPONSE,
+        "webhook_url": os.environ.get("LEARNFORGE_WEBHOOK_URL") or None,
+    }
+
+
+# -------- Signal velocity (time-series) --------
 
 @api_router.get("/signals/{signal_id}/syllabus/stream")
 async def stream_syllabus(signal_id: str):

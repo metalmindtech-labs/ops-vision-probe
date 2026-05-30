@@ -1,0 +1,303 @@
+import { useEffect, useMemo, useState } from "react";
+import {
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    Tooltip,
+    ResponsiveContainer,
+    CartesianGrid,
+} from "recharts";
+import { VelocityAPI } from "@/lib/api";
+import { TrendingUp, Activity } from "lucide-react";
+import { DASHBOARD } from "@/constants/testIds/dashboard";
+
+const RANGES = [
+    { label: "6H", hours: 6 },
+    { label: "24H", hours: 24 },
+    { label: "7D", hours: 168 },
+];
+
+// Lime-on-charcoal palette — variants for up to 6 series
+const SERIES_COLORS = [
+    "#a3e635", // lime-400 (primary)
+    "#84cc16", // lime-500
+    "#bef264", // lime-300
+    "#facc15", // amber 400 (whale tier hint)
+    "#38bdf8", // sky 400
+    "#f472b6", // pink 400
+];
+
+function fmtTime(iso, hours) {
+    const d = new Date(iso);
+    if (hours <= 24) {
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    }
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+function fmtNumber(n) {
+    if (n >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
+    return n.toString();
+}
+
+function TerminalTooltip({ active, payload, label, hours, seriesIndex }) {
+    if (!active || !payload || !payload.length) return null;
+    const d = new Date(label);
+    return (
+        <div className="border border-lime-400/40 bg-zinc-950/95 backdrop-blur px-3 py-2 rounded-sm font-mono text-[11px] shadow-lg">
+            <div className="text-zinc-500 mb-1 uppercase tracking-wider">
+                {d.toLocaleString([], {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                })}
+            </div>
+            {payload.map((p) => (
+                <div key={p.dataKey} className="flex items-center gap-2">
+                    <span
+                        className="inline-block w-2 h-0.5"
+                        style={{ background: p.color }}
+                    />
+                    <span className="text-zinc-300 truncate max-w-[18rem]">
+                        {seriesIndex[p.dataKey]?.title || p.dataKey}
+                    </span>
+                    <span className="text-zinc-100 ml-auto">
+                        {p.value?.toLocaleString?.() ?? p.value}
+                    </span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+export default function SignalVelocityChart() {
+    const [hours, setHours] = useState(24);
+    const [data, setData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [hiddenIds, setHiddenIds] = useState(new Set());
+
+    useEffect(() => {
+        let cancelled = false;
+        setLoading(true);
+        VelocityAPI.get({ hours, limit: 6 })
+            .then((d) => {
+                if (!cancelled) setData(d);
+            })
+            .catch(() => {})
+            .finally(() => !cancelled && setLoading(false));
+        return () => {
+            cancelled = true;
+        };
+    }, [hours]);
+
+    const { merged, series, seriesIndex } = useMemo(() => {
+        if (!data?.series) return { merged: [], series: [], seriesIndex: {} };
+        const tBuckets = new Map();
+        for (const s of data.series) {
+            for (const p of s.points) {
+                if (!tBuckets.has(p.t)) tBuckets.set(p.t, { t: p.t });
+                tBuckets.get(p.t)[s.signal_id] = p.v;
+            }
+        }
+        const idx = {};
+        data.series.forEach((s, i) => {
+            idx[s.signal_id] = {
+                title: s.title,
+                category: s.category,
+                priority: s.priority_score,
+                current: s.current,
+                color: SERIES_COLORS[i % SERIES_COLORS.length],
+            };
+        });
+        const sorted = [...tBuckets.values()].sort(
+            (a, b) => new Date(a.t) - new Date(b.t)
+        );
+        // Fill forward to keep lines continuous when a snapshot is missing
+        const last = {};
+        for (const row of sorted) {
+            for (const s of data.series) {
+                if (row[s.signal_id] != null) last[s.signal_id] = row[s.signal_id];
+                else if (last[s.signal_id] != null) row[s.signal_id] = last[s.signal_id];
+            }
+        }
+        return { merged: sorted, series: data.series, seriesIndex: idx };
+    }, [data]);
+
+    const toggle = (id) => {
+        setHiddenIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    return (
+        <section
+            data-testid={DASHBOARD.velocityChart}
+            className="border border-zinc-800 bg-zinc-900/30 rounded-sm terminal-shadow"
+        >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                    <span className="h-2 w-2 rounded-full bg-lime-400 pulse-lime" />
+                    <h2 className="font-mono text-sm uppercase tracking-[0.25em] text-zinc-300 inline-flex items-center gap-2">
+                        <TrendingUp className="h-3.5 w-3.5 text-lime-400" />
+                        Signal Velocity
+                    </h2>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+                        top 6 · registrations / time
+                    </span>
+                </div>
+                <div className="inline-flex items-center border border-zinc-800 rounded-sm overflow-hidden">
+                    {RANGES.map((r) => (
+                        <button
+                            key={r.hours}
+                            data-testid={DASHBOARD.velocityRangeBtn(r.label)}
+                            onClick={() => setHours(r.hours)}
+                            className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
+                                hours === r.hours
+                                    ? "bg-lime-400 text-black"
+                                    : "text-zinc-400 hover:text-zinc-50 hover:bg-zinc-800"
+                            }`}
+                        >
+                            {r.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="p-5 pt-4">
+                {loading && (
+                    <div className="h-64 flex items-center justify-center font-mono text-[11px] uppercase tracking-[0.25em] text-zinc-600">
+                        <Activity className="h-3 w-3 mr-2 animate-pulse text-lime-400" />
+                        acquiring time-series…
+                    </div>
+                )}
+                {!loading && merged.length === 0 && (
+                    <div className="h-64 flex items-center justify-center font-mono text-[11px] uppercase tracking-[0.25em] text-zinc-600">
+                        no data in window
+                    </div>
+                )}
+                {!loading && merged.length > 0 && (
+                    <>
+                        <div className="h-72 -ml-2">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart
+                                    data={merged}
+                                    margin={{ top: 8, right: 16, bottom: 0, left: 0 }}
+                                >
+                                    <CartesianGrid
+                                        stroke="#27272a"
+                                        strokeDasharray="2 4"
+                                        vertical={false}
+                                    />
+                                    <XAxis
+                                        dataKey="t"
+                                        tickFormatter={(v) => fmtTime(v, hours)}
+                                        stroke="#52525b"
+                                        tick={{
+                                            fontSize: 10,
+                                            fontFamily: "JetBrains Mono",
+                                            fill: "#71717a",
+                                        }}
+                                        minTickGap={40}
+                                        axisLine={{ stroke: "#27272a" }}
+                                        tickLine={false}
+                                    />
+                                    <YAxis
+                                        tickFormatter={fmtNumber}
+                                        stroke="#52525b"
+                                        tick={{
+                                            fontSize: 10,
+                                            fontFamily: "JetBrains Mono",
+                                            fill: "#71717a",
+                                        }}
+                                        axisLine={{ stroke: "#27272a" }}
+                                        tickLine={false}
+                                        width={48}
+                                    />
+                                    <Tooltip
+                                        content={
+                                            <TerminalTooltip
+                                                hours={hours}
+                                                seriesIndex={seriesIndex}
+                                            />
+                                        }
+                                        cursor={{
+                                            stroke: "#a3e635",
+                                            strokeOpacity: 0.3,
+                                            strokeDasharray: "2 3",
+                                        }}
+                                    />
+                                    {series.map((s, i) => (
+                                        <Line
+                                            key={s.signal_id}
+                                            type="monotone"
+                                            dataKey={s.signal_id}
+                                            stroke={
+                                                SERIES_COLORS[i % SERIES_COLORS.length]
+                                            }
+                                            strokeWidth={1.5}
+                                            dot={false}
+                                            activeDot={{
+                                                r: 3,
+                                                stroke: "#000",
+                                                strokeWidth: 1,
+                                            }}
+                                            isAnimationActive
+                                            animationDuration={650}
+                                            hide={hiddenIds.has(s.signal_id)}
+                                        />
+                                    ))}
+                                </LineChart>
+                            </ResponsiveContainer>
+                        </div>
+
+                        {/* Legend / Toggles */}
+                        <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap gap-x-4 gap-y-2">
+                            {series.map((s, i) => {
+                                const color = SERIES_COLORS[i % SERIES_COLORS.length];
+                                const hidden = hiddenIds.has(s.signal_id);
+                                return (
+                                    <button
+                                        key={s.signal_id}
+                                        data-testid={DASHBOARD.velocityLegendItem(
+                                            s.signal_id
+                                        )}
+                                        onClick={() => toggle(s.signal_id)}
+                                        className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] transition-opacity ${
+                                            hidden ? "opacity-30" : ""
+                                        }`}
+                                    >
+                                        <span
+                                            className="inline-block w-3 h-0.5"
+                                            style={{ background: color }}
+                                        />
+                                        <span className="text-zinc-300 max-w-[18rem] truncate">
+                                            {s.title}
+                                        </span>
+                                        <span className="text-zinc-500">
+                                            {fmtNumber(s.current)}
+                                        </span>
+                                        <span
+                                            className={`px-1 py-0.5 rounded-sm border ${
+                                                s.priority_score >= 90
+                                                    ? "text-lime-400 border-lime-400/40"
+                                                    : "text-zinc-500 border-zinc-700"
+                                            }`}
+                                        >
+                                            p{s.priority_score}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </>
+                )}
+            </div>
+        </section>
+    );
+}

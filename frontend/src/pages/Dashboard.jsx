@@ -12,6 +12,7 @@ import CategoryBreakdown from "@/components/dashboard/CategoryBreakdown";
 import ScraperStatusBar from "@/components/dashboard/ScraperStatusBar";
 import PasteHtmlDialog from "@/components/dashboard/PasteHtmlDialog";
 import StrikeAlertsBanner from "@/components/dashboard/StrikeAlertsBanner";
+import SignalVelocityChart from "@/components/dashboard/SignalVelocityChart";
 
 export default function Dashboard() {
     const [signals, setSignals] = useState([]);
@@ -240,6 +241,10 @@ export default function Dashboard() {
                     />
 
                     <StatGrid stats={stats} loading={loading} />
+
+                    <div className="mt-8">
+                        <SignalVelocityChart />
+                    </div>
 
                     <div className="mt-10 grid grid-cols-1 lg:grid-cols-4 gap-6">
                         <div className="lg:col-span-3">
