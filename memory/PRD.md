@@ -19,6 +19,15 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v13: Payload Schema Remap + RLS Diagnostic)
+- **`syllabus.modules` → top-level `modules`** in the webhook payload, plus top-level `title`, `slug`, `category`, `summary`, `price_usd`, `registration_count`, `priority_score`, `source_url`, `paid_url`, `free_url`. The rich nested `course` object is preserved for full-fidelity downstream consumers (also now contains `course.modules` alias for backwards-compat).
+- **Signature header switched to BARE lowercase hex** (no `sha256=` prefix) as the primary `X-Radar-Signature` value — what LearnForge's Next.js receiver expects. Also send `X-Radar-Signature-Hex`, `X-Radar-Signature-Sha256` (with `sha256=` prefix), and `X-Radar-Signature-Algorithm: hmac-sha256` for tolerance.
+- **NEW debug endpoint `GET /api/integrations/signature-fingerprint`** — returns `secret_fingerprint = SHA256(secret)[:16]` so both Radar and LearnForge can verify they hold the same secret without ever leaking it; plus a deterministic test signature against a known canonical body.
+- **Every publish now logs `sig_first6 / sig_last6 / secret_fp / body_len / url`** to `backend.out.log` for cross-comparison with Vercel function logs.
+- **Receiver TS code (`/app/docs/learnforge_receiver_route.ts`) tolerates BOTH** bare hex and `sha256=`-prefixed signatures, and checks `X-Radar-Signature-Hex` as a fallback header.
+- **Failure-mode classifier upgraded** (backend `publisher.py` + frontend `PublishErrorDialog.jsx`) to recognize `Supabase RLS` 500s and duplicate-insert 500s with specific remediation copy (`CREATE POLICY` SQL snippet, `upsert(..., { onConflict: 'slug' })` hint).
+- **Live upstream progression captured**: 404 → 401 → 400 → **500 (Supabase RLS)** — signature is now ACCEPTED by LearnForge, payload schema is ACCEPTED, only remaining gap is a LearnForge-side Supabase row-level-security policy. Each progression is fully diagnosed and surfaced in the UI.
+
 ## Implemented (2026-05-30 — v12: HMAC-SHA256 Webhook Signing)
 - **Set `LEARNFORGE_WEBHOOK_SECRET=SovereignForge2026!`** in `/app/backend/.env`.
 - **HMAC-SHA256 signing**: `publisher.sign_payload()` computes `hmac.new(secret, body_bytes, sha256).hexdigest()` over a canonical JSON body (`json.dumps(payload, separators=(',', ':'), sort_keys=True)`). The exact same byte string is POSTed via `httpx.AsyncClient.post(..., content=body_bytes)` so the receiver's HMAC over the raw body always matches.

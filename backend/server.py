@@ -26,6 +26,7 @@ from services.publisher import (
     retry_pending,
     reconcile_with_learnforge,
     get_publish_history,
+    sign_payload,
 )
 from services.alerts import list_alerts, ack_alert, ack_all
 from services.whatsapp import get_status as whatsapp_status, send_whatsapp
@@ -516,6 +517,55 @@ async def integrations_webhook_receiver_spec():
         "code": code,
         "lines": code.count("\n") + 1,
         "bytes": len(code.encode("utf-8")),
+    }
+
+
+@api_router.get("/integrations/signature-fingerprint")
+async def integrations_signature_fingerprint(body: Optional[str] = None):
+    """Debug endpoint for the Architect to cross-compare the Radar's signing
+    state with LearnForge's Vercel logs *without leaking the actual secret*.
+
+    Returns:
+      - `secret_fingerprint`: first 16 hex chars of SHA256(secret). Both sides
+        can compare this — if they match, the secret bytes are identical.
+      - `algorithm` / `header_name` / `header_format`
+      - `test_signature`: HMAC-SHA256 of either the caller-provided `?body=`
+        param, or a fixed canonical probe body. LearnForge can run the same
+        HMAC on their side and compare digest-for-digest.
+    """
+    import hashlib
+
+    secret = (os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()
+    has_secret = bool(secret)
+    fingerprint = (
+        hashlib.sha256(secret.encode("utf-8")).hexdigest()[:16] if has_secret else None
+    )
+    probe_body = (
+        body if body is not None else '{"event":"probe","value":"SovereignForge2026!"}'
+    )
+    probe_bytes = probe_body.encode("utf-8")
+    sig = sign_payload(secret, probe_bytes) if has_secret else None
+    return {
+        "secret_configured": has_secret,
+        "secret_fingerprint": fingerprint,
+        "secret_length": len(secret) if has_secret else 0,
+        "algorithm": "hmac-sha256",
+        "header_name": "X-Radar-Signature",
+        "header_format": "<lowercase 64-char hex> (no 'sha256=' prefix)",
+        "also_sent_headers": [
+            "X-Radar-Signature-Hex",
+            "X-Radar-Signature-Sha256 (with 'sha256=' prefix)",
+            "X-Radar-Signature-Algorithm: hmac-sha256",
+        ],
+        "test_body": probe_body,
+        "test_body_bytes_len": len(probe_bytes),
+        "test_signature": sig,
+        "test_signature_first6": sig[:6] if sig else None,
+        "test_signature_last6": sig[-6:] if sig else None,
+        "instructions": (
+            "On the LearnForge side, run: hmac.new(SECRET.encode(), test_body.encode(), sha256).hexdigest() "
+            "— it must equal test_signature, and SHA256(SECRET).hexdigest()[:16] must equal secret_fingerprint."
+        ),
     }
 
 

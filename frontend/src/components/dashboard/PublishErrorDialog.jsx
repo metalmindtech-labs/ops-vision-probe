@@ -281,14 +281,34 @@ function classifyFailure(s) {
                 "Zod validation rejected the payload. Inspect the response body — usually a field type/name mismatch.",
             color: "amber",
         };
-    if (code >= 500)
+    if (code >= 500) {
+        const body = (s.last_publish_response_preview || "").toLowerCase();
+        if (body.includes("row-level security") || body.includes("row level security")) {
+            return {
+                kind: "supabase-rls",
+                title: `${code} · Supabase RLS blocks insert`,
+                detail:
+                    "LearnForge's `courses` table has Row Level Security enabled but no INSERT policy for the webhook role. On LearnForge: either swap the route to the service-role key, or run: `CREATE POLICY \"webhook_insert\" ON courses FOR INSERT TO service_role WITH CHECK (true);`",
+                color: "red",
+            };
+        }
+        if (body.includes("duplicate key") || body.includes("already exists")) {
+            return {
+                kind: "duplicate-insert",
+                title: `${code} · Duplicate insert`,
+                detail:
+                    "Receiver tried to INSERT instead of UPSERT. Switch to `supabase.from('courses').upsert(row, { onConflict: 'slug' })`.",
+                color: "amber",
+            };
+        }
         return {
             kind: "upstream-500",
             title: `${code} · Upstream error`,
             detail:
-                "LearnForge function crashed. Likely DB upsert failure — check the 'courses' table schema (price_usd nullable? metadata column?).",
+                "LearnForge function crashed. Inspect the response body and Vercel function logs.",
             color: "red",
         };
+    }
     if (code == null && s.last_publish_error?.startsWith?.("ConnectError"))
         return {
             kind: "connect",

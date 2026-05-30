@@ -64,18 +64,28 @@ type CoursePublishPayload = z.infer<typeof CoursePublish>;
 
 // ---------------------------------------------------------------------------
 // 2) Signature verification — HMAC-SHA256 of the raw request body using the
-//    shared secret. Header format: `sha256=<64-char hex>`.
-//    Constant-time compare via crypto.timingSafeEqual.
+//    shared secret. Header value is bare lowercase hex (no `sha256=` prefix).
+//    For tolerance we also strip a `sha256=` prefix if present and check the
+//    fallback `X-Radar-Signature-Hex` header. Constant-time comparison via
+//    crypto.timingSafeEqual.
 // ---------------------------------------------------------------------------
-function verifySignature(rawBody: string, header: string | null): boolean {
+function verifySignature(rawBody: string, headers: Headers): boolean {
     const secret = process.env.LEARNFORGE_WEBHOOK_SECRET;
     if (!secret) return true; // signing disabled — accept all
-    if (!header) return false;
 
-    const provided = header.startsWith("sha256=") ? header.slice(7) : header;
+    const headerValue =
+        headers.get("x-radar-signature") ??
+        headers.get("x-radar-signature-hex") ??
+        "";
+    if (!headerValue) return false;
+
+    const provided = headerValue.startsWith("sha256=")
+        ? headerValue.slice(7)
+        : headerValue;
+
     const expected = crypto
         .createHmac("sha256", secret)
-        .update(rawBody)
+        .update(rawBody, "utf8")
         .digest("hex");
 
     if (provided.length !== expected.length) return false;
@@ -177,7 +187,7 @@ export async function POST(req: NextRequest) {
     // payload the Radar signed. Don't call req.json() before this.
     const rawBody = await req.text();
 
-    if (!verifySignature(rawBody, req.headers.get("x-radar-signature"))) {
+    if (!verifySignature(rawBody, req.headers)) {
         return NextResponse.json(
             { ok: false, error: "bad signature" },
             { status: 401 },

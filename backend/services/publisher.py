@@ -75,16 +75,37 @@ def public_free_url(slug: str) -> str:
 
 
 def build_payload(signal: dict) -> dict:
-    """Stable webhook contract for downstream LearnForge consumers."""
+    """Stable webhook contract for downstream LearnForge consumers.
+
+    LearnForge's Next.js receiver expects flat top-level `title`, `slug`,
+    and `modules` (renamed from the previous nested `syllabus.modules`).
+    We also keep the rich nested `course` object for full-fidelity
+    downstream consumers and our own debug visibility.
+    """
     paid_slug = signal.get("paid_offer_slug") or signal.get("lead_magnet_slug")
     free_slug = signal.get("lead_magnet_slug")
+    title = signal.get("paid_offer_title") or signal.get("event_title")
+    modules = signal.get("syllabus_modules") or []
     return {
+        # ---- Top-level fields LearnForge's receiver validates ----
         "event": "course.publish",
         "signal_id": signal.get("id"),
         "published_at": _now(),
+        "title": title,
+        "slug": paid_slug,
+        "modules": modules,
+        "category": signal.get("category"),
+        "summary": signal.get("paid_offer_description") or "",
+        "price_usd": signal.get("paid_offer_price"),
+        "registration_count": signal.get("registration_count") or 0,
+        "priority_score": signal.get("priority_score") or 0,
+        "source_url": signal.get("source_url"),
+        "paid_url": public_paid_url(paid_slug) if paid_slug else None,
+        "free_url": public_free_url(free_slug) if free_slug else None,
+        # ---- Rich nested course object (full-fidelity, optional) ----
         "course": {
             "slug": paid_slug,
-            "title": signal.get("paid_offer_title") or signal.get("event_title"),
+            "title": title,
             "category": signal.get("category"),
             "summary": signal.get("paid_offer_description") or "",
             "price_usd": signal.get("paid_offer_price"),
@@ -100,9 +121,9 @@ def build_payload(signal: dict) -> dict:
                 "free_url": public_free_url(free_slug) if free_slug else None,
                 "paid_url": public_paid_url(paid_slug) if paid_slug else None,
             },
-            "syllabus": {
-                "modules": signal.get("syllabus_modules") or [],
-            },
+            # Modules are also surfaced here for backwards compatibility.
+            "modules": modules,
+            "syllabus": {"modules": modules},
             "demand": {
                 "registration_count": signal.get("registration_count") or 0,
                 "priority_score": signal.get("priority_score") or 0,
@@ -147,8 +168,25 @@ async def publish_signal(db, signal_id: str) -> dict:
         "utf-8"
     )
     if secret:
-        headers["X-Radar-Signature"] = f"sha256={sign_payload(secret, body_bytes)}"
+        signature_hex = sign_payload(secret, body_bytes)
+        # LearnForge's Next.js receiver expects BARE lowercase hex (no
+        # `sha256=` prefix). We also include the algorithm + a prefixed
+        # variant so any receiver implementation can find it.
+        headers["X-Radar-Signature"] = signature_hex
+        headers["X-Radar-Signature-Hex"] = signature_hex
+        headers["X-Radar-Signature-Sha256"] = f"sha256={signature_hex}"
         headers["X-Radar-Signature-Algorithm"] = "hmac-sha256"
+        # Log a fingerprint of both secret + signature so the Architect can
+        # cross-compare with Vercel logs without leaking the actual secret.
+        secret_fp = hashlib.sha256(secret.encode("utf-8")).hexdigest()[:8]
+        logger.info(
+            "publish_signal sig_first6=%s sig_last6=%s secret_fp=%s body_len=%d url=%s",
+            signature_hex[:6],
+            signature_hex[-6:],
+            secret_fp,
+            len(body_bytes),
+            url,
+        )
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
@@ -173,10 +211,25 @@ async def publish_signal(db, signal_id: str) -> dict:
                     "to a value LearnForge will accept on the X-Radar-Signature header."
                 )
             elif resp.status_code >= 500:
-                result["hint"] = (
-                    "LearnForge returned a server error. Inspect the response_preview "
-                    "and check the Vercel function logs."
-                )
+                body_lower = (result["response_preview"] or "").lower()
+                if "row-level security" in body_lower or "row level security" in body_lower:
+                    result["hint"] = (
+                        "Supabase RLS policy on the `courses` table is blocking "
+                        "the insert. On LearnForge: either use the service-role "
+                        "key in the route handler, or add an INSERT policy: "
+                        "`CREATE POLICY \"webhook_insert\" ON courses FOR INSERT "
+                        "TO service_role WITH CHECK (true);`"
+                    )
+                elif "duplicate key" in body_lower or "already exists" in body_lower:
+                    result["hint"] = (
+                        "Receiver tried to INSERT instead of UPSERT. Use "
+                        "supabase.from('courses').upsert(row, { onConflict: 'slug' })."
+                    )
+                else:
+                    result["hint"] = (
+                        "LearnForge returned a server error. Inspect the "
+                        "response_preview and check the Vercel function logs."
+                    )
     except httpx.ConnectError as e:
         logger.exception("publish_signal connect error: %s", e)
         result["error"] = f"ConnectError: {e}"
