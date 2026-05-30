@@ -74,6 +74,8 @@ export const IntegrationsAPI = {
         client
             .get(`/integrations/handoff-doc`, { responseType: "text" })
             .then((r) => r.data),
+    receiverSpec: () =>
+        client.get(`/integrations/webhook-receiver-spec`).then((r) => r.data),
 };
 
 export const VelocityAPI = {

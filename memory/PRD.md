@@ -19,6 +19,13 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v9: Webhook Spec Viewer / Bridge for Antigravity Inject)
+- **Receiver code source-of-truth**: `/app/docs/learnforge_receiver_route.ts` — 222 lines of drop-in Next.js App Router code (Zod validation, `crypto.timingSafeEqual` signature verification, idempotent upsert stub with full Prisma example, GET health-check, `runtime="nodejs"`, `dynamic="force-dynamic"`). Single file the Architect can paste into Vercel / GCP Antigravity.
+- **Backend `/api/integrations/webhook-receiver-spec`**: returns structured JSON `{ filename, endpoint_url, framework, runtime, signature_header, shared_secret_required_env, shared_secret_configured, deps, lines, bytes, code }` so the UI can render meta-cards + the code block from one fetch.
+- **Frontend `WebhookSpecDialog`** + `WEBHOOK SPEC` button in the dashboard header (lime, prominent, between Integrations and Republish All): shows endpoint URL, signature header (with masked/reveal toggle), framework/runtime/secret meta cards, the full 222-line code in a scrollable `<pre>`, one-click `Copy Code` and `Download .ts`, plus a 3-step post-deploy verification checklist.
+- **Verified Radar IS hitting `https://learnforge-core.vercel.app/api/courses`** — `r.url` assertion passes; current 404 is purely a missing remote route, not a Radar bug. Diagnostic hint already surfaces this in `PublishResultPanel`.
+- Tested: 7/7 code-content checks pass on the receiver source (NextRequest/NextResponse, Zod schema, timingSafeEqual, POST handler, GET health-check, runtime, upsertCourse fn).
+
 ## Implemented (2026-05-30 — v8: LearnForge Team Handoff)
 - **Single-shot handoff doc** at `/app/docs/LEARNFORGE_INGEST_SPEC.md` — 14.8 KB, 8 sections covering: endpoint to deploy, headers, full v1 payload schema + field reference, expected response, drop-in TypeScript Next.js App Router route handler (with Zod validation + `crypto.timingSafeEqual` signature verification), local curl validation, post-deploy checklist, and change log. All `/en/` legacy refs stripped — example URLs use the `/signup?course=<slug>&ref=radar&tier=<…>` form.
 - **Backend** `GET /api/integrations/handoff-doc` serves the doc as `text/markdown` with `Content-Disposition: inline; filename="LEARNFORGE_INGEST_SPEC.md"` for one-click download.

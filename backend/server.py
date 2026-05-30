@@ -404,6 +404,42 @@ async def integrations_handoff_doc():
     )
 
 
+@api_router.get("/integrations/webhook-receiver-spec")
+async def integrations_webhook_receiver_spec():
+    """Drop-in Next.js App Router receiver code for the LearnForge team.
+
+    Returns the canonical TypeScript route handler the Architect can paste
+    into `learnforge-core/app/api/courses/route.ts`. Single source of truth
+    lives at /app/docs/learnforge_receiver_route.ts.
+    """
+    from pathlib import Path
+
+    code_path = (
+        Path(__file__).resolve().parent.parent / "docs" / "learnforge_receiver_route.ts"
+    )
+    if not code_path.exists():
+        raise HTTPException(status_code=404, detail="Receiver code not bundled")
+    code = code_path.read_text(encoding="utf-8")
+    webhook_url = os.environ.get("LEARNFORGE_WEBHOOK_URL") or None
+    has_secret = bool((os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip())
+    return {
+        "language": "typescript",
+        "framework": "nextjs-app-router",
+        "filename": "app/api/courses/route.ts",
+        "endpoint_url": webhook_url
+        or "https://learnforge-core.vercel.app/api/courses",
+        "signature_header": "X-Radar-Signature",
+        "shared_secret_required_env": "LEARNFORGE_WEBHOOK_SECRET",
+        "shared_secret_configured": has_secret,
+        "node_runtime": "nodejs",
+        "deps": ["zod"],
+        "version": "v1",
+        "code": code,
+        "lines": code.count("\n") + 1,
+        "bytes": len(code.encode("utf-8")),
+    }
+
+
 # -------- Signal velocity (time-series) --------
 
 @api_router.get("/signals/{signal_id}/syllabus/stream")

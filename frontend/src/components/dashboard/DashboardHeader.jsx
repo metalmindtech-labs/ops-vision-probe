@@ -3,6 +3,7 @@ import { Plus, RefreshCw, Radar, Terminal, Satellite, Clipboard, RotateCw } from
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 import IntegrationsBadge from "@/components/dashboard/IntegrationsBadge";
 import { InstallButton } from "@/components/PWAInstall";
+import { WebhookSpecButton } from "@/components/dashboard/WebhookSpecDialog";
 
 export default function DashboardHeader({
     onAdd,
@@ -50,6 +51,7 @@ export default function DashboardHeader({
                         status={integrationsStatus}
                         onRefresh={refreshIntegrations}
                     />
+                    <WebhookSpecButton />
                     <InstallButton />
                     <Button
                         data-testid={DASHBOARD.republishAllBtn}
