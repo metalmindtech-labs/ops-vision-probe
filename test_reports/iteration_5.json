@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 5 retest of CRITICAL ConversionPanel.jsx crash fix and SSE streaming syllabus flow. All scenarios PASSED. ConversionPanel opens without ReferenceError, useSyllabusStream hook correctly drives the UI, the trigger button flips label/icon, SyllabusList renders 'streaming · claude sonnet 4.5' header during stream, all 6 modules render with title/summary/objectives/artifact/duration_min, and persistence after reload works without auto-streaming.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_5.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "useSyllabusStream.start callback is wrapped in useCallback with empty deps — fine because it only uses refs/setters; safe.",
+    "ConversionPanel.jsx is now ~600 lines including helper components (PublishStatusBadge, PublishResultPanel). Approaching the 700-line soft limit — consider extracting helpers to separate files in a future iteration, but not blocking.",
+    "EventSource is not closed on component unmount in useSyllabusStream — only on reset()/done/error. Sheet close does not unmount the hook owner in this layout, so it's not currently leaking, but adding a useEffect cleanup that calls reset() on unmount would be defensive."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (SSE sanity: start + 6x module + done events received in 30s)",
+    "frontend": "100%"
+  },
+  "test_credentials": "none required",
+  "seed_data_creation": "none — used existing seeded signals",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "ConversionPanel + useSyllabusStream integration is verified. SSE stream takes ~25-30s end-to-end due to upstream proxy buffering — the SSE events are NOT actually streamed module-by-module to the browser; the proxy delivers them in a single chunk near the end. The UI handles this gracefully: button shows 'Streaming N/6…' label throughout, and modules appear when the chunk lands. If the team needs true progressive rendering visible to end-users, investigate ingress/k8s buffering for text/event-stream (X-Accel-Buffering: no header, or disable nginx proxy_buffering). For now the functional flow is correct.",
+  "rca of the issue": "Previous iter-4 crash was due to ConversionPanel.jsx referencing `stream.modules`, `stream.streaming`, `stream.start`, `stream.reset` without importing useSyllabusStream or calling the hook. Fix verified: line 26 imports the hook, line 43 calls it, line 47 resets on signal change. No ReferenceError observed in pageerror listener or DOM scan during full e2e flow.",
+  "verified_scenarios": [
+    "Dashboard loads, 31 convert buttons present",
+    "Click Convert -> sheet opens without React error overlay (no ReferenceError)",
+    "Initial trigger button label = 'Stream LearnForge Syllabus (Claude 4.5)'",
+    "Click trigger -> within 1s label becomes 'Streaming 0/6…' with Activity icon",
+    "SyllabusList renders during streaming with 'streaming…' header and Activity pulse icon",
+    "Stream completes at ~26s, label returns to default",
+    "All 6 modules rendered with index, title, duration_min, summary, Objectives bullets, Artifact line",
+    "Close sheet + page reload + reopen same signal -> 6 modules persisted, button NOT auto-streaming"
+  ]
+}

@@ -19,10 +19,11 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Zap, Copy, ArrowUpRight, Sparkles, Rocket, CheckCircle2, XCircle } from "lucide-react";
+import { Zap, Copy, ArrowUpRight, Sparkles, Rocket, CheckCircle2, XCircle, Activity } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 import { learnforgeScrollUrl, learnforgeCourseUrl } from "@/lib/learnforge";
 import { PublishAPI } from "@/lib/api";
+import useSyllabusStream from "@/hooks/useSyllabusStream";
 import CTAPreview from "@/components/dashboard/CTAPreview";
 import SyllabusList from "@/components/dashboard/SyllabusList";
 
@@ -39,6 +40,13 @@ export default function ConversionPanel({
     const [forging, setForging] = useState(false);
     const [publishing, setPublishing] = useState(false);
     const [publishResult, setPublishResult] = useState(null);
+    const stream = useSyllabusStream();
+
+    useEffect(() => {
+        // Reset stream state whenever the selected signal changes
+        stream.reset();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [signal?.id]);
 
     useEffect(() => {
         if (signal) {
