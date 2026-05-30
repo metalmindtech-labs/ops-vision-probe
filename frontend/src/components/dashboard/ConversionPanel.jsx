@@ -472,6 +472,9 @@ export default function ConversionPanel({
                                             : signal.syllabus_modules
                                     }
                                     streaming={stream.streaming}
+                                    heroImageUrl={
+                                        stream.heroImageUrl || signal.hero_image_url
+                                    }
                                 />
                             </>
                         )}

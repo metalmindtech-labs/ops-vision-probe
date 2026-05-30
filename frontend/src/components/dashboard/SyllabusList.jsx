@@ -1,7 +1,7 @@
 import { Clock, Target, Package, Activity } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 
-export default function SyllabusList({ modules, streaming = false }) {
+export default function SyllabusList({ modules, streaming = false, heroImageUrl = null }) {
     if (!modules || modules.length === 0) {
         if (streaming) {
             return (
@@ -35,15 +35,42 @@ export default function SyllabusList({ modules, streaming = false }) {
                     )}
                     {streaming
                         ? "streaming…"
-                        : `${modules.length} modules · claude sonnet 4.5`}
+                        : `${modules.length} modules · claude 4.5 · flux pro`}
                 </span>
             </div>
+            {heroImageUrl && (
+                <div
+                    data-testid="syllabus-hero-image"
+                    className="mb-3 relative border border-lime-400/30 rounded-sm overflow-hidden group"
+                >
+                    <img
+                        src={heroImageUrl}
+                        alt="Course hero — Fal Flux.1 Pro · Sovereign style"
+                        loading="lazy"
+                        className="w-full aspect-[16/9] object-cover"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 px-3 py-1.5 bg-gradient-to-t from-black/80 to-transparent">
+                        <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-lime-400">
+                            hero · flux.1 pro · sovereign
+                        </span>
+                    </div>
+                </div>
+            )}
             <div className="space-y-2">
                 {modules.map((m) => (
                     <div
                         key={m.index}
-                        className="border border-zinc-800 hover:border-lime-400/30 bg-zinc-900/30 rounded-sm p-4 transition-colors group animate-fade-in"
+                        className="border border-zinc-800 hover:border-lime-400/30 bg-zinc-900/30 rounded-sm overflow-hidden transition-colors group animate-fade-in"
                     >
+                        {m.image_url && (
+                            <img
+                                src={m.image_url}
+                                alt={`Module ${m.index} — Fal Flux.1 Pro`}
+                                loading="lazy"
+                                className="w-full aspect-[16/9] object-cover border-b border-zinc-800"
+                            />
+                        )}
+                        <div className="p-4">
                         <div className="flex items-start gap-4">
                             <span className="font-mono text-xs text-lime-400 mt-1 min-w-[28px]">
                                 {String(m.index).padStart(2, "0")}
@@ -99,6 +126,7 @@ export default function SyllabusList({ modules, streaming = false }) {
                                     </div>
                                 )}
                             </div>
+                        </div>
                         </div>
                     </div>
                 ))}

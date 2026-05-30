@@ -86,6 +86,7 @@ def build_payload(signal: dict) -> dict:
     free_slug = signal.get("lead_magnet_slug")
     title = signal.get("paid_offer_title") or signal.get("event_title")
     modules = signal.get("syllabus_modules") or []
+    hero_image_url = signal.get("hero_image_url")
     return {
         # ---- Top-level fields LearnForge's receiver validates ----
         "event": "course.publish",
@@ -102,6 +103,13 @@ def build_payload(signal: dict) -> dict:
         "source_url": signal.get("source_url"),
         "paid_url": public_paid_url(paid_slug) if paid_slug else None,
         "free_url": public_free_url(free_slug) if free_slug else None,
+        # Cinematic visuals (Fal Flux.1 Pro · Sovereign Style Sheet)
+        "hero_image_url": hero_image_url,
+        "visuals": {
+            "hero": hero_image_url,
+            "model": signal.get("visuals_model"),
+            "style": signal.get("visuals_style"),
+        },
         # ---- Rich nested course object (full-fidelity, optional) ----
         "course": {
             "slug": paid_slug,
@@ -109,6 +117,7 @@ def build_payload(signal: dict) -> dict:
             "category": signal.get("category"),
             "summary": signal.get("paid_offer_description") or "",
             "price_usd": signal.get("paid_offer_price"),
+            "hero_image_url": hero_image_url,
             "lead_magnet": {
                 "title": signal.get("lead_magnet_title") or "",
                 "description": signal.get("lead_magnet_description") or "",

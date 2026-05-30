@@ -16,6 +16,7 @@ export default function useSyllabusStream() {
     const [error, setError] = useState(null);
     const [phase, setPhase] = useState(null);
     const [elapsedS, setElapsedS] = useState(0);
+    const [heroImageUrl, setHeroImageUrl] = useState(null);
     const sourceRef = useRef(null);
 
     const reset = useCallback(() => {
@@ -28,6 +29,7 @@ export default function useSyllabusStream() {
         setStreaming(false);
         setPhase(null);
         setElapsedS(0);
+        setHeroImageUrl(null);
     }, []);
 
     // Defensive cleanup on unmount — closes any open EventSource.
@@ -74,6 +76,26 @@ export default function useSyllabusStream() {
                         /* noop */
                     }
                 });
+                es.addEventListener("visuals", (e) => {
+                    try {
+                        const v = JSON.parse(e.data);
+                        if (v.hero) setHeroImageUrl(v.hero);
+                        if (Array.isArray(v.module_urls)) {
+                            const byIdx = new Map(
+                                v.module_urls.map((x) => [x.index, x.url])
+                            );
+                            setModules((prev) =>
+                                prev.map((m) => {
+                                    const url = byIdx.get(m.index);
+                                    return url ? { ...m, image_url: url } : m;
+                                })
+                            );
+                        }
+                        setPhase("visuals-done");
+                    } catch {
+                        /* noop */
+                    }
+                });
                 es.addEventListener("done", (e) => {
                     setStreaming(false);
                     setPhase("done");
@@ -103,5 +125,5 @@ export default function useSyllabusStream() {
         []
     );
 
-    return { modules, streaming, error, phase, elapsedS, start, reset };
+    return { modules, streaming, error, phase, elapsedS, heroImageUrl, start, reset };
 }

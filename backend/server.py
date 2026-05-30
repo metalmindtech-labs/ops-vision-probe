@@ -19,6 +19,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from services.ingestion import run_scrape, ingest_html, latest_run
 from services.ai import generate_syllabus_ai
+from services.visuals import generate_course_visuals
 from services.publisher import (
     publish_signal,
     build_payload,
@@ -248,9 +249,26 @@ async def trigger_syllabus(signal_id: str):
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
     modules = await generate_syllabus_ai(existing)
+    # Generate cinematic visuals (Fal Flux.1 Pro) — non-blocking on failure.
+    visuals_signal = {**existing, "syllabus_modules": modules}
+    try:
+        visuals = await generate_course_visuals(visuals_signal, skip_existing=False)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("visuals generation failed: %s", e)
+        visuals = {"hero": None, "modules": [], "errors": [str(e)]}
+    # Stitch image URLs into each module
+    by_idx = {m["index"]: m for m in visuals.get("modules") or []}
+    for m in modules:
+        url = (by_idx.get(m.get("index")) or {}).get("url")
+        if url:
+            m["image_url"] = url
     updates = {
         "syllabus_generated": True,
         "syllabus_modules": modules,
+        "hero_image_url": visuals.get("hero"),
+        "visuals_model": visuals.get("model"),
+        "visuals_style": visuals.get("style"),
+        "visuals_errors": visuals.get("errors") or None,
         "status": "converting" if existing.get("status") == "tracked" else existing.get("status"),
         "updated_at": now_iso(),
     }
@@ -258,6 +276,45 @@ async def trigger_syllabus(signal_id: str):
     merged = {**existing, **updates}
     merged.pop("_id", None)
     return merged
+
+
+@api_router.post("/signals/{signal_id}/visuals/regenerate")
+async def regenerate_visuals(signal_id: str):
+    """Re-run Fal Flux.1 Pro for the hero + all modules of a signal.
+
+    Useful when the Architect wants to refresh the cinematic look without
+    re-running the LLM syllabus pass.
+    """
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    if not existing.get("syllabus_generated"):
+        raise HTTPException(status_code=400, detail="Generate the syllabus first")
+    visuals = await generate_course_visuals(existing, skip_existing=False)
+    modules = list(existing.get("syllabus_modules") or [])
+    by_idx = {m["index"]: m for m in visuals.get("modules") or []}
+    for m in modules:
+        url = (by_idx.get(m.get("index")) or {}).get("url")
+        if url:
+            m["image_url"] = url
+    updates = {
+        "syllabus_modules": modules,
+        "hero_image_url": visuals.get("hero"),
+        "visuals_model": visuals.get("model"),
+        "visuals_style": visuals.get("style"),
+        "visuals_errors": visuals.get("errors") or None,
+        "updated_at": now_iso(),
+    }
+    await db.signals.update_one({"id": signal_id}, {"$set": updates})
+    return {
+        "ok": True,
+        "hero_image_url": visuals.get("hero"),
+        "module_urls": [
+            {"index": m["index"], "url": m.get("image_url")} for m in modules
+        ],
+        "errors": visuals.get("errors") or [],
+        "model": visuals.get("model"),
+    }
 
 
 # -------- Scraper / Ingestion --------
@@ -623,9 +680,62 @@ async def stream_syllabus(signal_id: str):
             yield f"event: module\ndata: {json.dumps(m)}\n\n"
             await asyncio.sleep(0.25)
 
+        # Visual generation phase — emit progress events so the SSE stream
+        # stays alive while Fal Flux.1 Pro processes 7 images.
+        yield (
+            "event: progress\ndata: "
+            + json.dumps({"phase": "rendering-visuals", "modules": len(modules)})
+            + "\n\n"
+        )
+        visuals_signal = {**existing, "syllabus_modules": modules}
+        visuals_task = asyncio.create_task(
+            generate_course_visuals(visuals_signal, skip_existing=False)
+        )
+        v_ticks = 0
+        while not visuals_task.done():
+            try:
+                await asyncio.wait_for(asyncio.shield(visuals_task), timeout=1.0)
+            except asyncio.TimeoutError:
+                v_ticks += 1
+                yield f": heartbeat visuals {v_ticks}\n\n"
+                yield (
+                    "event: progress\ndata: "
+                    + json.dumps({"phase": "rendering-visuals", "elapsed_s": v_ticks})
+                    + "\n\n"
+                )
+        try:
+            visuals = visuals_task.result()
+        except Exception as e:  # noqa: BLE001
+            logger.exception("stream visuals failed: %s", e)
+            visuals = {"hero": None, "modules": [], "errors": [str(e)]}
+
+        by_idx = {m["index"]: m for m in visuals.get("modules") or []}
+        for m in modules:
+            url = (by_idx.get(m.get("index")) or {}).get("url")
+            if url:
+                m["image_url"] = url
+        yield (
+            "event: visuals\ndata: "
+            + json.dumps(
+                {
+                    "hero": visuals.get("hero"),
+                    "module_urls": [
+                        {"index": m["index"], "url": m.get("image_url")}
+                        for m in modules
+                    ],
+                    "errors": visuals.get("errors") or [],
+                }
+            )
+            + "\n\n"
+        )
+
         updates = {
             "syllabus_generated": True,
             "syllabus_modules": modules,
+            "hero_image_url": visuals.get("hero"),
+            "visuals_model": visuals.get("model"),
+            "visuals_style": visuals.get("style"),
+            "visuals_errors": visuals.get("errors") or None,
             "status": "converting"
             if existing.get("status") == "tracked"
             else existing.get("status"),

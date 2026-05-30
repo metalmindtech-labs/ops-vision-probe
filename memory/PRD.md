@@ -19,6 +19,20 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v15: Fal.ai Flux.1 Pro Visual Engine + FIRST GREEN LIVE PUBLISH 🟢)
+- **`FAL_KEY` injected** into `/app/backend/.env`.
+- **New service `services/visuals.py`** powered by `fal_client` (v1.0.0, added to requirements.txt). Calls `fal-ai/flux-pro/v1.1` with the **Sovereign Style Sheet** suffix (dark mode, cinematic, high-contrast, charcoal/obsidian + cyber lime accents, 8K, no AI-slop tokens, no text/logos). Builds one prompt for the course hero + one per syllabus module; dispatches all 7 with bounded concurrency (3) and graceful per-image error capture.
+- **Pipeline wired**: `POST /api/signals/{id}/syllabus` now calls `generate_course_visuals` after Claude finishes. SSE `stream_syllabus` adds a `rendering-visuals` phase + heartbeat ticks while Fal generates, then emits a final `event: visuals` with `{ hero, module_urls, errors }` so the UI can paint images in real time. New endpoint `POST /api/signals/{id}/visuals/regenerate` for one-click refresh.
+- **Webhook payload extended** to carry visuals: top-level `hero_image_url` + `visuals: { hero, model, style }`, plus per-module `image_url` field. `course.hero_image_url` mirror preserved for backwards-compat consumers.
+- **Frontend rendering**: `SyllabusList` now displays the hero banner (16:9, lime-bordered, "hero · flux.1 pro · sovereign" caption) and a 16:9 image atop each module card. `useSyllabusStream` hook tracks `heroImageUrl` and merges incoming `module_urls` from the `visuals` SSE event.
+- **🎯 Final outcome — FIRST GREEN LIVE PUBLISH**:
+  - All 4 signals regenerated visuals: 4× hero + 24× module images, 0 errors, ~7-8s per signal.
+  - `republish_all_live` → **attempted=4, ok=4, failed=0**
+  - Reconcile: `published=4, failed=0, pending=0, drift=0`
+  - LearnForge response: `{"success":true,"message":"Course upserted successfully","course":{"id":"c5144565-3c12-4ec8-93a3-cec70dca9b52",...}}`
+  - SYNC button now shows the green-dot in-sync indicator instead of the red drift badge.
+- The 6-step bridge journey is now complete end-to-end: **404 → 401 → 400 → 500(RLS) → 500(env) → 200 LIVE ✓**
+
 ## Implemented (2026-05-30 — v14: Supabase Env Diagnostic + Verified 16f960f Compatibility)
 - **Verified the Radar payload IS aligned** with LearnForge's `16f960f` route handler — `modules` (not `syllabus`), `title`, `slug` all present as top-level strings; modules array contains 6 items with the expected keys (`index`, `title`, `summary`, `learning_objectives`, `artifact`, `duration_min`).
 - **LearnForge endpoint is reachable** (GET → 405 POST-only "learnforge-course-publish") — receiver code is deployed and accepting our signed requests.
