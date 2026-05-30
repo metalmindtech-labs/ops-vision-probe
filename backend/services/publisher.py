@@ -32,12 +32,27 @@ def _webhook_url() -> Optional[str]:
     return url or None
 
 
+def _signup_url(slug: Optional[str], tier: str) -> str:
+    """All public-facing enrollment CTAs land on /signup (no /en/, no deep
+    course/scroll routes — those 404 on the live LearnForge deployment).
+    The slug is preserved as ?course=<slug>&tier=<tier>&ref=radar so
+    LearnForge can attribute and route after sign-up.
+    """
+    base = f"{_public_base()}/signup"
+    if not slug:
+        return base
+    from urllib.parse import urlencode
+
+    qs = urlencode({"course": slug, "ref": "radar", "tier": tier})
+    return f"{base}?{qs}"
+
+
 def public_paid_url(slug: str) -> str:
-    return f"{_public_base()}/en/courses/{slug}"
+    return _signup_url(slug, tier="forgecore")
 
 
 def public_free_url(slug: str) -> str:
-    return f"{_public_base()}/en/scrolls/{slug}"
+    return _signup_url(slug, tier="free")
 
 
 def build_payload(signal: dict) -> dict:
@@ -118,6 +133,39 @@ async def publish_signal(db, signal_id: str) -> dict:
         result["ok"] = 200 <= resp.status_code < 300
         if not result["ok"]:
             result["error"] = f"HTTP {resp.status_code}"
+            # Surface actionable diagnostics for common failure modes so the
+            # Architect can see WHY this failed in the UI without grepping logs.
+            if resp.status_code == 404:
+                result["hint"] = (
+                    "The webhook URL returned 404 — the LearnForge `/api/courses` "
+                    "route is not deployed yet. Either deploy that route on "
+                    "learnforge-core.vercel.app, or point LEARNFORGE_WEBHOOK_URL "
+                    "at a working ingest endpoint."
+                )
+            elif resp.status_code == 401 or resp.status_code == 403:
+                result["hint"] = (
+                    "Webhook rejected the request — set LEARNFORGE_WEBHOOK_SECRET "
+                    "to a value LearnForge will accept on the X-Radar-Signature header."
+                )
+            elif resp.status_code >= 500:
+                result["hint"] = (
+                    "LearnForge returned a server error. Inspect the response_preview "
+                    "and check the Vercel function logs."
+                )
+    except httpx.ConnectError as e:
+        logger.exception("publish_signal connect error: %s", e)
+        result["error"] = f"ConnectError: {e}"
+        result["hint"] = (
+            "Could not reach the webhook host. Check LEARNFORGE_WEBHOOK_URL and "
+            "ensure the LearnForge deployment is live."
+        )
+    except httpx.TimeoutException as e:
+        logger.exception("publish_signal timeout: %s", e)
+        result["error"] = f"Timeout: {e}"
+        result["hint"] = (
+            "The webhook did not respond within 20s. LearnForge function may be "
+            "cold-starting; retry will run automatically."
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception("publish_signal http error: %s", e)
         result["error"] = f"{type(e).__name__}: {e}"

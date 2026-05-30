@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 10 — verified all 3 Architect P0 directives end-to-end. (1) Publish webhook surfaces 404 + diagnostic hint correctly; (2) SSE syllabus streaming emits start/progress/module/done with real-time heartbeats (counter increments live in UI from 0s..6s..N s and 6 modules render); (3) all enrollment CTAs route to https://learnforge-core.vercel.app/signup?course=...&ref=radar&tier=... with NO /en/, /courses/, or /scrolls/ sub-paths.",
+  "backend_tested": [
+    "GET /api/signals/{id}/publish/preview — CTA URL shape clean (paid_url, free_url, lead_magnet.url all /signup?course=...&ref=radar&tier=...)",
+    "POST /api/signals/{id}/publish — returns ok=false, status_code=404, hint contains '/api/courses' and 'not deployed', payload CTAs clean",
+    "GET /api/signals/{id}/syllabus/stream (SSE) — Content-Type=text/event-stream; counts via curl: start=1, progress=23, module=6, done=1, heartbeats=23 over ~24s; UI counter increments in real time (0s→6s observed during the 6.4s sampling window)"
+  ],
+  "frontend_tested": [
+    "ConversionPanel CTA copy buttons: free → https://learnforge-core.vercel.app/signup?course=the-mbb-case-cheat-sheet&ref=radar&tier=free; paid → https://learnforge-core.vercel.app/signup?course=forgecore-mbb-case-mastery&ref=radar&tier=forgecore",
+    "CTAPreview anchors: Enroll in ForgeCore + Grab the Free Drop both href = /signup?course=...&tier=forgecore|free",
+    "publish-to-learnforge-btn click → publish-result-panel renders red 'WEBHOOK FAILED' banner, HTTP 404, amber DEBUG hint mentioning '/api/courses route is not deployed yet', response body {\"detail\":\"Not Found\"}, and COPY PAYLOAD button",
+    "trigger-syllabus-btn click → label transitions from 'STREAM LEARNFORGE SYLLABUS (CLAUDE 4.5)' to 'CLAUDE SYNTHESIZING… 0S' within <1s and increments live (1S,2S,3S,4S,5S,6S observed); modules render into syllabus-modules-list after ~25s"
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "infra_observations": [
+    "Cloudflare edge rewrites Cache-Control on the SSE response from 'no-cache, no-transform' to 'no-store, no-cache, must-revalidate' and strips X-Accel-Buffering from the visible headers. SSE still streams in real time (verified via curl and via UI counter incrementing), so this is cosmetic — the no-store directive is at least as strong as no-cache. No action needed unless a stricter proxy is added downstream."
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_iter10_publish_and_stream.py",
+    "/app/test_reports/pytest/iter10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "stream_syllabus correctly busts proxy buffering with the 2KB padding comment + 1s heartbeat ticks while shielding the LLM task — robust against ingress buffering.",
+    "publisher._signup_url is a single source of truth for all 3 CTA flavors (paid/free/lead_magnet) — good DRY refactor; matches frontend lib/learnforge.js withRef helper.",
+    "Existing Recharts width(-1)/height(-1) warning on initial 1920×1080 render is benign (already noted in iteration_9); chart settles correctly."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter10_publish_and_stream.py"],
+  "success_rate": {"backend": "100% (3/3 pytest)", "frontend": "100% (4/4 flows)"},
+  "seed_data_creation": "none — used existing signal e3171073-0ae9-4bf8-ae9b-3bb2e303a576 ('Cracking the MBB Consulting Case Interview') as provided",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All 3 Architect P0 directives are verified PASSING. Backend regression test file at /app/backend/tests/test_iter10_publish_and_stream.py covers: (a) publish-preview CTA shape, (b) publish webhook 404+hint diagnostics, (c) SSE stream event counts and headers. SSE test uses python-requests streaming and accepts either no-cache or no-store in Cache-Control because Cloudflare rewrites the header at the edge. Signal e3171073-... is preserved with syllabus_generated=true."
+}

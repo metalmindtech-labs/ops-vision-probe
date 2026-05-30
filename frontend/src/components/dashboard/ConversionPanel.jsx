@@ -439,7 +439,9 @@ export default function ConversionPanel({
                                 {forging || stream.streaming ? (
                                     <>
                                         <Activity className="h-4 w-4 mr-2 animate-pulse" />
-                                        Streaming {stream.modules.length}/6…
+                                        {stream.phase === "synthesizing" && stream.modules.length === 0
+                                            ? `Claude Synthesizing… ${stream.elapsedS}s`
+                                            : `Streaming ${stream.modules.length}/6…`}
                                     </>
                                 ) : (
                                     <>
@@ -564,10 +566,19 @@ function PublishStatusBadge({ signal }) {
 
 function PublishResultPanel({ result }) {
     const ok = result.ok;
+    const [showPayload, setShowPayload] = useState(false);
+    const copyPayload = async () => {
+        try {
+            await navigator.clipboard.writeText(JSON.stringify(result.payload, null, 2));
+            toast.success("Webhook payload copied");
+        } catch {
+            toast.error("Copy failed");
+        }
+    };
     return (
         <div
             data-testid={DASHBOARD.publishResultPanel}
-            className={`border rounded-sm p-3 font-mono text-[11px] space-y-1 ${
+            className={`border rounded-sm p-3 font-mono text-[11px] space-y-2 ${
                 ok
                     ? "border-emerald-400/30 bg-emerald-400/5"
                     : "border-red-400/30 bg-red-500/5"
@@ -582,7 +593,7 @@ function PublishResultPanel({ result }) {
                 </span>
             </div>
             <div className="text-zinc-400 truncate">
-                <span className="text-zinc-600">→ </span>
+                <span className="text-zinc-600">POST </span>
                 {result.url || "—"}
             </div>
             {result.error && (
@@ -590,9 +601,42 @@ function PublishResultPanel({ result }) {
                     {result.error}
                 </div>
             )}
+            {result.hint && (
+                <div className="text-amber-300 text-[10px] leading-relaxed border-t border-amber-400/20 pt-2">
+                    <span className="uppercase tracking-[0.2em] text-amber-400/70">
+                        debug ·{" "}
+                    </span>
+                    {result.hint}
+                </div>
+            )}
             {result.response_preview && (
-                <pre className="text-[10px] text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-sm p-2 overflow-x-auto max-h-32">
-                    {result.response_preview}
+                <div className="space-y-1">
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                        response body
+                    </div>
+                    <pre className="text-[10px] text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-sm p-2 overflow-x-auto max-h-32 whitespace-pre-wrap">
+                        {result.response_preview}
+                    </pre>
+                </div>
+            )}
+            <div className="flex items-center gap-2 pt-1 border-t border-zinc-800">
+                <button
+                    onClick={() => setShowPayload((v) => !v)}
+                    className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 hover:text-lime-300 transition-colors"
+                >
+                    {showPayload ? "hide" : "show"} payload
+                </button>
+                <span className="text-zinc-700">·</span>
+                <button
+                    onClick={copyPayload}
+                    className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 hover:text-lime-300 transition-colors inline-flex items-center gap-1"
+                >
+                    <Copy className="h-3 w-3" /> copy payload
+                </button>
+            </div>
+            {showPayload && result.payload && (
+                <pre className="text-[10px] text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-sm p-2 overflow-x-auto max-h-60 whitespace-pre">
+                    {JSON.stringify(result.payload, null, 2)}
                 </pre>
             )}
         </div>

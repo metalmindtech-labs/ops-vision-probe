@@ -1,19 +1,31 @@
 // Single source of truth for the public LearnForge destination.
-// LearnForge is deployed on Vercel with Next.js i18n — all visitor-facing
-// routes are prefixed with the locale (currently `/en`).
+// As of Architect directive (2026-05-30) all visitor-facing enrollment CTAs
+// land on the universal /signup route. Localized sub-paths (/en/*) and the
+// /courses/<slug>, /scrolls/<slug> deep-routes are temporarily disabled
+// because those routes are not yet deployed on learnforge-core.vercel.app
+// — they 404. /signup is a live, locale-aware redirect. The course slug is
+// preserved as a query param (?course=<slug>) so the LearnForge signup page
+// can attribute the lead back to the originating ForgeCore offer.
 export const LEARNFORGE_URL = "https://learnforge-core.vercel.app";
-export const LEARNFORGE_LOCALE = "en";
+export const LEARNFORGE_SIGNUP_URL = `${LEARNFORGE_URL}/signup`;
 
-// Paid offers land on /en/courses/<slug>. Free lead-magnets land on
-// /en/scrolls/<slug> (the "Scrolls" library route already exists on the
-// live deployment). Keep these helpers in lockstep with the publisher
-// service on the backend (services/publisher.py).
-export const learnforgeCourseUrl = (slug) =>
-    `${LEARNFORGE_URL}/${LEARNFORGE_LOCALE}/courses/${slug}`;
+const withRef = (slug, kind) => {
+    if (!slug) return LEARNFORGE_SIGNUP_URL;
+    const u = new URL(LEARNFORGE_SIGNUP_URL);
+    u.searchParams.set("course", slug);
+    u.searchParams.set("ref", "radar");
+    if (kind) u.searchParams.set("tier", kind);
+    return u.toString();
+};
 
-export const learnforgeScrollUrl = (slug) =>
-    `${LEARNFORGE_URL}/${LEARNFORGE_LOCALE}/scrolls/${slug}`;
+// Paid enrollment CTA (ForgeCore offer)
+export const learnforgeCourseUrl = (slug) => withRef(slug, "forgecore");
+// Free lead-magnet CTA (Scroll)
+export const learnforgeScrollUrl = (slug) => withRef(slug, "free");
+// Generic signup CTA (no slug context)
+export const learnforgeSignupUrl = () => LEARNFORGE_SIGNUP_URL;
 
-// Legacy aliases (preserved so old imports continue to work).
+// Legacy aliases preserved
 export const learnforgePaidUrl = learnforgeCourseUrl;
 export const learnforgeFreeUrl = learnforgeScrollUrl;
+export const LEARNFORGE_LOCALE = "en";

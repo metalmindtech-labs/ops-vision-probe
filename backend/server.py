@@ -393,23 +393,51 @@ async def stream_syllabus(signal_id: str):
 
     Emits `module` events one-by-one so the UI can render progressively
     (command-center feel). The full syllabus is generated server-side via
-    Claude Sonnet 4.5 and then drip-fed to the client.
+    Claude Sonnet 4.5 and then drip-fed to the client. While the LLM call
+    is in flight we emit `: heartbeat` comments every second so any
+    intermediate proxy (k8s ingress / Cloudflare / nginx) does NOT buffer
+    the connection and the UI gets visible progress.
     """
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
 
     async def event_stream():
+        # 2KB padding comment busts default nginx/cloudfront proxy buffers
+        # so the very first `start` event is visible to the client.
+        yield ":" + (" " * 2048) + "\n\n"
+        yield "retry: 5000\n\n"
         yield f"event: start\ndata: {json.dumps({'signal_id': signal_id})}\n\n"
+
+        # Run the LLM call concurrently with a 1s heartbeat so the
+        # connection looks alive even while Claude is thinking.
+        task = asyncio.create_task(generate_syllabus_ai(existing))
+        ticks = 0
         try:
-            modules = await generate_syllabus_ai(existing)
+            while not task.done():
+                try:
+                    await asyncio.wait_for(asyncio.shield(task), timeout=1.0)
+                except asyncio.TimeoutError:
+                    ticks += 1
+                    yield f": heartbeat {ticks}\n\n"
+                    yield (
+                        "event: progress\ndata: "
+                        + json.dumps({"phase": "synthesizing", "elapsed_s": ticks})
+                        + "\n\n"
+                    )
+            modules = task.result()
         except Exception as e:  # noqa: BLE001
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            logger.exception("stream_syllabus LLM error: %s", e)
+            yield (
+                "event: error\ndata: "
+                + json.dumps({"error": f"{type(e).__name__}: {e}"})
+                + "\n\n"
+            )
             return
 
         for m in modules:
             yield f"event: module\ndata: {json.dumps(m)}\n\n"
-            await asyncio.sleep(0.45)
+            await asyncio.sleep(0.25)
 
         updates = {
             "syllabus_generated": True,
@@ -426,9 +454,10 @@ async def stream_syllabus(signal_id: str):
         event_stream(),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache",
+            "Cache-Control": "no-cache, no-transform",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
+            "Content-Encoding": "identity",
         },
     )
 
