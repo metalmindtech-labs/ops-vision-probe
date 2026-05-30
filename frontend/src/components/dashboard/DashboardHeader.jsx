@@ -1,13 +1,18 @@
 import { Button } from "@/components/ui/button";
-import { Plus, RefreshCw, Radar, Terminal, Satellite, Clipboard } from "lucide-react";
+import { Plus, RefreshCw, Radar, Terminal, Satellite, Clipboard, RotateCw } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
+import IntegrationsBadge from "@/components/dashboard/IntegrationsBadge";
 
 export default function DashboardHeader({
     onAdd,
     onRefresh,
     onRunScraper,
     onPasteHtml,
+    onRepublishAll,
+    integrationsStatus,
+    refreshIntegrations,
     scraperBusy,
+    republishBusy,
 }) {
     return (
         <header className="relative">
@@ -40,6 +45,20 @@ export default function DashboardHeader({
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
+                    <IntegrationsBadge
+                        status={integrationsStatus}
+                        onRefresh={refreshIntegrations}
+                    />
+                    <Button
+                        data-testid={DASHBOARD.republishAllBtn}
+                        onClick={onRepublishAll}
+                        disabled={republishBusy}
+                        variant="outline"
+                        className="rounded-sm border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 font-mono text-xs uppercase tracking-wider disabled:opacity-60"
+                    >
+                        <RotateCw className={`h-3.5 w-3.5 mr-2 ${republishBusy ? "animate-spin" : ""}`} />
+                        {republishBusy ? "Republishing…" : "Republish All"}
+                    </Button>
                     <Button
                         data-testid={DASHBOARD.pasteHtmlBtn}
                         onClick={onPasteHtml}

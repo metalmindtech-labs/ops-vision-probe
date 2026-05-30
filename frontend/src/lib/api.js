@@ -42,6 +42,14 @@ export const PublishAPI = {
             .then((r) => r.data),
     preview: (id) =>
         client.get(`/signals/${id}/publish/preview`).then((r) => r.data),
+    publishAllLive: () =>
+        client
+            .post(`/signals/publish-all-live`, null, { timeout: 180000 })
+            .then((r) => r.data),
+    retryPending: () =>
+        client
+            .post(`/signals/retry-pending-publishes`, null, { timeout: 60000 })
+            .then((r) => r.data),
 };
 
 export const AlertsAPI = {
@@ -52,3 +60,14 @@ export const AlertsAPI = {
     ack: (id) => client.post(`/alerts/${id}/ack`).then((r) => r.data),
     ackAll: () => client.post(`/alerts/ack-all`).then((r) => r.data),
 };
+
+export const IntegrationsAPI = {
+    status: () => client.get(`/integrations/status`).then((r) => r.data),
+    testWhatsApp: () =>
+        client
+            .post(`/integrations/whatsapp/test`, null, { timeout: 30000 })
+            .then((r) => r.data),
+};
+
+export const syllabusStreamUrl = (id) =>
+    `${API}/signals/${id}/syllabus/stream`;

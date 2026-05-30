@@ -1,8 +1,11 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Body
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import json
+import asyncio
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
@@ -16,8 +19,14 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from services.ingestion import run_scrape, ingest_html, latest_run
 from services.ai import generate_syllabus_ai
-from services.publisher import publish_signal, build_payload
+from services.publisher import (
+    publish_signal,
+    build_payload,
+    republish_all_live,
+    retry_pending,
+)
 from services.alerts import list_alerts, ack_alert, ack_all
+from services.whatsapp import get_status as whatsapp_status, send_whatsapp
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -98,6 +107,8 @@ class Signal(SignalBase):
     last_publish_error: Optional[str] = None
     last_publish_status_code: Optional[int] = None
     published_to_url: Optional[str] = None
+    publish_retry_count: Optional[int] = 0
+    publish_next_retry_at: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 
@@ -286,6 +297,90 @@ async def alerts_ack_all():
     return {"acknowledged": await ack_all(db)}
 
 
+# -------- Bulk republish + Streaming syllabus + Integrations --------
+
+@api_router.post("/signals/publish-all-live")
+async def signals_publish_all_live():
+    return await republish_all_live(db)
+
+
+@api_router.post("/signals/retry-pending-publishes")
+async def signals_retry_pending_publishes():
+    return await retry_pending(db)
+
+
+@api_router.get("/integrations/status")
+async def integrations_status():
+    ws = whatsapp_status()
+    return {
+        "whatsapp": {
+            "configured": ws.configured,
+            "from_number": ws.from_number if ws.configured else None,
+            "to_number_masked": ws.to_number_masked or None,
+            "threshold": ws.threshold,
+            "reason": ws.reason,
+        },
+        "publish_webhook": {
+            "url": os.environ.get("LEARNFORGE_WEBHOOK_URL") or None,
+            "has_secret": bool((os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()),
+        },
+    }
+
+
+@api_router.post("/integrations/whatsapp/test")
+async def integrations_whatsapp_test():
+    result = send_whatsapp(
+        "🛰️ *LearnForge Radar* — test ping. WhatsApp is wired up correctly."
+    )
+    return result
+
+
+@api_router.get("/signals/{signal_id}/syllabus/stream")
+async def stream_syllabus(signal_id: str):
+    """Server-Sent Events syllabus generator.
+
+    Emits `module` events one-by-one so the UI can render progressively
+    (command-center feel). The full syllabus is generated server-side via
+    Claude Sonnet 4.5 and then drip-fed to the client.
+    """
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+
+    async def event_stream():
+        yield f"event: start\ndata: {json.dumps({'signal_id': signal_id})}\n\n"
+        try:
+            modules = await generate_syllabus_ai(existing)
+        except Exception as e:  # noqa: BLE001
+            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            return
+
+        for m in modules:
+            yield f"event: module\ndata: {json.dumps(m)}\n\n"
+            await asyncio.sleep(0.45)
+
+        updates = {
+            "syllabus_generated": True,
+            "syllabus_modules": modules,
+            "status": "converting"
+            if existing.get("status") == "tracked"
+            else existing.get("status"),
+            "updated_at": now_iso(),
+        }
+        await db.signals.update_one({"id": signal_id}, {"$set": updates})
+        yield f"event: done\ndata: {json.dumps({'count': len(modules)})}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @api_router.post("/signals/seed")
 async def seed_signals():
     """Seed initial 7 curated Leland-style signals (idempotent)."""
@@ -443,6 +538,15 @@ async def scheduled_scrape_job():
         logger.exception("Scheduled scrape failed: %s", e)
 
 
+async def scheduled_retry_job():
+    try:
+        result = await retry_pending(db)
+        if result["attempted"]:
+            logger.info("Scheduled publish-retry: %s", result)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Scheduled retry failed: %s", e)
+
+
 @app.on_event("startup")
 async def on_startup():
     try:
@@ -464,9 +568,15 @@ async def on_startup():
             replace_existing=True,
             next_run_time=first_run,
         )
+        scheduler.add_job(
+            scheduled_retry_job,
+            trigger=IntervalTrigger(minutes=5),
+            id="publish_retry",
+            replace_existing=True,
+        )
         scheduler.start()
         logger.info(
-            "APScheduler started · leland_scrape every 12h · first run %s",
+            "APScheduler started · leland_scrape every 12h · first run %s · publish_retry every 5m",
             first_run.isoformat(),
         )
     except Exception as e:  # noqa: BLE001

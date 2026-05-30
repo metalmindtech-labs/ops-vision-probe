@@ -74,6 +74,11 @@ async def ingest_events(
                         signal_title=ev.event_title,
                         prev_count=old_count,
                         new_count=ev.registration_count,
+                        category=existing.get("category", ""),
+                        priority_score=patch.get(
+                            "priority_score",
+                            existing.get("priority_score") or 0,
+                        ),
                     )
                 updated += 1
                 continue

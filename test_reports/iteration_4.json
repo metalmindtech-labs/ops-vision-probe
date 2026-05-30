@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration-4 testing of backend (Integrations status, WhatsApp test, Republish-All, Retry-Pending, SSE syllabus stream, strike alerts w/ whatsapp_status) and frontend (Integrations dialog, Republish-All flow, streaming syllabus). All 5 new backend endpoints functioning per spec; strike alerts now carry priority_score/category/whatsapp_status. SSE stream emits start + 6 module + done events and persists 6 modules to MongoDB. Frontend Integrations badge + dialog + Send Test Ping + Republish All button all work. CRITICAL: ConversionPanel.jsx crashes with ReferenceError 'stream is not defined' — useSyllabusStream hook never imported/instantiated. Entire conversion sheet + streaming syllabus flow is broken on the UI.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/scraper/ingest-html (strike test fixture)", "issue": "test_publish_alerts.py TestStrikeIngestion uses STRIKE_HTML hard-coded to 9999 registered, but MBB count has drifted to >9999 across iterations, so ingest no longer triggers a new strike alert. 2 of 27 pytest cases fail because of stale fixture, not a regression. Recommend updating STRIKE_HTML count to monotonically increase or reset MBB in fixture."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ConversionPanel.jsx", "issue": "CRITICAL: 'ReferenceError: stream is not defined' — file references stream.start(), stream.streaming, stream.modules at lines 75,428,431,434,455,460-461,464 but never imports useSyllabusStream hook nor declares `const stream = useSyllabusStream()`. Conversion sheet crashes with React error overlay immediately when opened. Streaming syllabus flow is completely broken on the UI.", "selector": "[data-testid='trigger-syllabus-btn']", "priority": "CRITICAL"},
+      {"component": "DashboardHeader.jsx", "issue": "Spec asked for testid='sync-btn' and 'log-signal-btn' but actual testids used are DASHBOARD.refreshBtn and DASHBOARD.addSignalBtn (i.e., the buttons exist visually as SYNC / +LOG SIGNAL but the data-testid names differ from the iteration-4 acceptance spec). Cosmetic — main agent should standardise testid names.", "selector": "header", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Stream LearnForge Syllabus (Claude 4.5) — frontend", "issue": "Cannot validate progressive rendering or '<6 modules at 2s' snapshot because ConversionPanel itself crashes before the stream can start. Backend SSE endpoint independently verified working (6 module events + done event, persists to Mongo).", "affected_selectors": ["[data-testid='trigger-syllabus-btn']", "[data-testid='syllabus-modules-list']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_signals.py",
+    "/app/backend/tests/test_scraper.py",
+    "/app/backend/tests/test_publish_alerts.py",
+    "/app/test_reports/pytest/pytest_iter4.xml"
+  ],
+  "action_items": [
+    "FIX (CRITICAL): In /app/frontend/src/components/dashboard/ConversionPanel.jsx — add `import useSyllabusStream from '@/hooks/useSyllabusStream'` and declare `const stream = useSyllabusStream();` inside the component (likely near the other useState calls). Also call stream.reset() when the sheet closes / signal changes. Without this, the entire conversion sheet 500-errors on open.",
+    "Optional: rename header testids to sync-btn / log-signal-btn to match iteration-4 spec, or update the spec.",
+    "Optional: refresh test_publish_alerts.STRIKE_HTML count or reset MBB registration_count in test setup so the strike test self-bootstraps."
+  ],
+  "critical_code_review_comments": [
+    "ConversionPanel.jsx imports SyllabusList but never wires the useSyllabusStream hook — the variable `stream` is used 6 times yet undeclared. This is a build-time bug masked because React only crashes at render time, not at compile.",
+    "Toast for Republish All disappears very quickly (<2s in our 8s wait window). Acceptance text 'Catalog republish complete · 2 attempted · 0 ok · 2 failed' could not be screen-grabbed — consider longer-lived sonner toast for completion.",
+    "Two pytest cases in test_publish_alerts use stateful HTML fixtures that depend on prior MongoDB state — flaky between iterations."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (5/5 iter-4 endpoints + strike payload all pass; 25/27 pytest regression — 2 failures are stale fixtures, not iter-4 regressions)", "frontend": "60% (Integrations dialog + Republish All work; entire conversion sheet & streaming flow broken by undeclared `stream`)"},
+  "seed_data_creation": "Triggered ingest-html with surge count 88888 to validate strike whatsapp_status='skipped' for priority_score>=90.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend verified: GET /api/integrations/status, POST /api/integrations/whatsapp/test, POST /api/signals/publish-all-live (2 attempted/0 ok/2 failed with HTTP 404 from learnforge-core.vercel.app — expected), POST /api/signals/retry-pending-publishes, GET /api/signals/{id}/syllabus/stream (event: start → 6× event: module → event: done; persists syllabus_generated=true + 6 modules). Strike alerts on priority_score>=90 carry whatsapp_status='skipped'. Frontend ConversionPanel crashes (stream not defined) — must be fixed before streaming flow can be re-tested.",
+  "rca of the issue": "ConversionPanel.jsx references `stream.start`, `stream.streaming`, `stream.modules` but the corresponding `const stream = useSyllabusStream();` line plus its `import` were never added. The component renders fine for signals whose syllabus is already generated only IF the references are also guarded — but they aren't (lines 428/431/434/455/460/461/464 access stream.* unconditionally). Repro: open dashboard, click CONVERT on any row → red React error overlay 'stream is not defined'. Mitigation: add the import + hook call as described in action_items[0]."
+}

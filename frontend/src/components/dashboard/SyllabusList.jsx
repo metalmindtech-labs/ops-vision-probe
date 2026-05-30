@@ -1,23 +1,48 @@
-import { Clock, Target, Package } from "lucide-react";
+import { Clock, Target, Package, Activity } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 
-export default function SyllabusList({ modules }) {
-    if (!modules || modules.length === 0) return null;
+export default function SyllabusList({ modules, streaming = false }) {
+    if (!modules || modules.length === 0) {
+        if (streaming) {
+            return (
+                <section data-testid={DASHBOARD.syllabusList}>
+                    <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-mono text-xs uppercase tracking-[0.25em] text-lime-400">
+                            04 · AI-Generated Syllabus
+                        </h3>
+                        <span className="font-mono text-[10px] text-lime-400 inline-flex items-center gap-1.5">
+                            <Activity className="h-3 w-3 animate-pulse" />
+                            streaming · claude sonnet 4.5
+                        </span>
+                    </div>
+                    <div className="font-mono text-[11px] text-zinc-500 border border-dashed border-zinc-800 rounded-sm p-6 text-center">
+                        <span className="blink text-lime-400">_</span> waiting for first module…
+                    </div>
+                </section>
+            );
+        }
+        return null;
+    }
     return (
         <section data-testid={DASHBOARD.syllabusList}>
             <div className="flex items-center justify-between mb-3">
                 <h3 className="font-mono text-xs uppercase tracking-[0.25em] text-lime-400">
                     04 · AI-Generated Syllabus
                 </h3>
-                <span className="font-mono text-[10px] text-zinc-500">
-                    {modules.length} modules · claude sonnet 4.5
+                <span className="font-mono text-[10px] text-zinc-500 inline-flex items-center gap-1.5">
+                    {streaming && (
+                        <Activity className="h-3 w-3 text-lime-400 animate-pulse" />
+                    )}
+                    {streaming
+                        ? "streaming…"
+                        : `${modules.length} modules · claude sonnet 4.5`}
                 </span>
             </div>
             <div className="space-y-2">
                 {modules.map((m) => (
                     <div
                         key={m.index}
-                        className="border border-zinc-800 hover:border-lime-400/30 bg-zinc-900/30 rounded-sm p-4 transition-colors group"
+                        className="border border-zinc-800 hover:border-lime-400/30 bg-zinc-900/30 rounded-sm p-4 transition-colors group animate-fade-in"
                     >
                         <div className="flex items-start gap-4">
                             <span className="font-mono text-xs text-lime-400 mt-1 min-w-[28px]">

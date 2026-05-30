@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { SignalsAPI, ScraperAPI, AlertsAPI } from "@/lib/api";
+import { SignalsAPI, ScraperAPI, AlertsAPI, PublishAPI, IntegrationsAPI } from "@/lib/api";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import StatGrid from "@/components/dashboard/StatGrid";
@@ -18,25 +18,38 @@ export default function Dashboard() {
     const [stats, setStats] = useState(null);
     const [scraperStatus, setScraperStatus] = useState(null);
     const [alerts, setAlerts] = useState([]);
+    const [integrations, setIntegrations] = useState(null);
     const [loading, setLoading] = useState(true);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState(null);
     const [conversionId, setConversionId] = useState(null);
     const [pasteOpen, setPasteOpen] = useState(false);
     const [scraperBusy, setScraperBusy] = useState(false);
+    const [republishBusy, setRepublishBusy] = useState(false);
+
+    const refreshIntegrations = async () => {
+        try {
+            const s = await IntegrationsAPI.status();
+            setIntegrations(s);
+        } catch {
+            /* noop */
+        }
+    };
 
     const refresh = async () => {
         try {
-            const [list, st, scStatus, al] = await Promise.all([
+            const [list, st, scStatus, al, ints] = await Promise.all([
                 SignalsAPI.list(),
                 SignalsAPI.stats(),
                 ScraperAPI.status().catch(() => null),
                 AlertsAPI.list(true).catch(() => []),
+                IntegrationsAPI.status().catch(() => null),
             ]);
             setSignals(list);
             setStats(st);
             setScraperStatus(scStatus);
             setAlerts(al);
+            setIntegrations(ints);
         } catch (e) {
             toast.error("Failed to load signals", {
                 description: e?.message ?? "Network error",
@@ -178,6 +191,26 @@ export default function Dashboard() {
         setConversionId(id);
     };
 
+    const handleRepublishAll = async () => {
+        setRepublishBusy(true);
+        const t = toast.loading("Republishing entire catalog…", {
+            description: "Firing webhooks for every converted course.",
+        });
+        try {
+            const res = await PublishAPI.publishAllLive();
+            const tone = res.ok > 0 ? toast.success : toast.error;
+            tone("Catalog republish complete", {
+                id: t,
+                description: `${res.attempted} attempted · ${res.ok} ok · ${res.failed} failed`,
+            });
+            await refresh();
+        } catch (e) {
+            toast.error("Republish failed", { id: t, description: e?.message });
+        } finally {
+            setRepublishBusy(false);
+        }
+    };
+
     return (
         <div
             data-testid={DASHBOARD.root}
@@ -190,7 +223,11 @@ export default function Dashboard() {
                         onRefresh={refresh}
                         onRunScraper={handleRunScraper}
                         onPasteHtml={() => setPasteOpen(true)}
+                        onRepublishAll={handleRepublishAll}
+                        integrationsStatus={integrations}
+                        refreshIntegrations={refreshIntegrations}
                         scraperBusy={scraperBusy}
+                        republishBusy={republishBusy}
                     />
 
                     <ScraperStatusBar status={scraperStatus} />

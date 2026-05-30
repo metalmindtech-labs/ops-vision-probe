@@ -1,17 +1,16 @@
-"""Diff-aware demand-surge alerts ("strikes").
-
-When the scraper updates an existing signal and the registration count
-jumps by more than the configured threshold (default 20%), an alert is
-recorded so the Architect can see accelerating demand at a glance.
-"""
+"""Diff-aware demand-surge alerts ("strikes")."""
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from services.whatsapp import format_strike_message, get_status, send_whatsapp
+
+logger = logging.getLogger(__name__)
 STRIKE_THRESHOLD = float(os.environ.get("STRIKE_THRESHOLD_PCT", "20")) / 100.0
 
 
@@ -31,6 +30,8 @@ async def record_strike(
     signal_title: str,
     prev_count: int,
     new_count: int,
+    category: str = "",
+    priority_score: int = 0,
 ) -> dict:
     delta = new_count - prev_count
     delta_pct = round(delta / max(prev_count, 1) * 100.0, 1)
@@ -38,6 +39,8 @@ async def record_strike(
         "id": str(uuid.uuid4()),
         "signal_id": signal_id,
         "signal_title": signal_title,
+        "category": category,
+        "priority_score": priority_score,
         "prev_count": prev_count,
         "new_count": new_count,
         "delta": delta,
@@ -45,7 +48,36 @@ async def record_strike(
         "detected_at": _now(),
         "acknowledged": False,
         "acknowledged_at": None,
+        "whatsapp_status": None,
+        "whatsapp_sid": None,
     }
+
+    # WhatsApp push for whale-tier strikes
+    status = get_status()
+    if priority_score >= status.threshold:
+        body = format_strike_message(
+            signal_title=signal_title,
+            category=category or "—",
+            prev_count=prev_count,
+            new_count=new_count,
+            delta_pct=delta_pct,
+            priority_score=priority_score,
+        )
+        result = send_whatsapp(body)
+        if result.get("skipped"):
+            alert["whatsapp_status"] = "skipped"
+        elif result.get("ok"):
+            alert["whatsapp_status"] = "sent"
+            alert["whatsapp_sid"] = result.get("sid")
+        else:
+            alert["whatsapp_status"] = "failed"
+        logger.info(
+            "Strike alert priority=%s whatsapp=%s sid=%s",
+            priority_score,
+            alert["whatsapp_status"],
+            alert["whatsapp_sid"],
+        )
+
     await db.signal_alerts.insert_one(dict(alert))
     alert.pop("_id", None)
     return alert

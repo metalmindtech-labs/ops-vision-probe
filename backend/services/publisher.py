@@ -143,7 +143,9 @@ async def _persist(
     status_code: Optional[int] = None,
 ) -> None:
     paid_url = payload["course"]["cta"]["paid_url"]
-    updates = {
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0}) or {}
+    retry_count = existing.get("publish_retry_count") or 0
+    updates: dict = {
         "publish_status": status,
         "last_published_at": _now() if status == "published" else None,
         "last_publish_error": error,
@@ -152,8 +154,19 @@ async def _persist(
         "updated_at": _now(),
     }
     if status == "published":
-        # Promote pipeline state to "live"
         updates["status"] = "live"
+        updates["publish_retry_count"] = 0
+        updates["publish_next_retry_at"] = None
+    else:
+        new_retry = min(retry_count + 1, 5)
+        # Exponential backoff: 2,4,8,16,32 minutes
+        from datetime import timedelta
+
+        delay = timedelta(minutes=2 ** new_retry)
+        updates["publish_retry_count"] = new_retry
+        updates["publish_next_retry_at"] = (
+            datetime.now(timezone.utc) + delay
+        ).isoformat() if new_retry < 5 else None
     await db.signals.update_one({"id": signal_id}, {"$set": updates})
     await db.publish_log.insert_one(
         {
@@ -165,3 +178,75 @@ async def _persist(
             "at": _now(),
         }
     )
+
+
+async def republish_all_live(db) -> dict:
+    """Republish every signal that has a syllabus generated.
+
+    Used as a "hot-reload" for the LearnForge catalog after schema/prompt
+    changes — re-fires the webhook for every converted course in one strike.
+    """
+    cursor = db.signals.find(
+        {"syllabus_generated": True},
+        {"_id": 0},
+    )
+    docs = await cursor.to_list(1000)
+    results: list[dict] = []
+    ok_count = 0
+    fail_count = 0
+    for d in docs:
+        try:
+            r = await publish_signal(db, d["id"])
+            results.append(
+                {
+                    "signal_id": d["id"],
+                    "title": d.get("event_title"),
+                    "ok": r.get("ok"),
+                    "status_code": r.get("status_code"),
+                    "error": r.get("error"),
+                }
+            )
+            if r.get("ok"):
+                ok_count += 1
+            else:
+                fail_count += 1
+        except Exception as e:  # noqa: BLE001
+            fail_count += 1
+            results.append(
+                {
+                    "signal_id": d["id"],
+                    "title": d.get("event_title"),
+                    "ok": False,
+                    "error": f"{type(e).__name__}: {e}",
+                }
+            )
+    return {
+        "attempted": len(docs),
+        "ok": ok_count,
+        "failed": fail_count,
+        "results": results,
+        "ran_at": _now(),
+    }
+
+
+async def retry_pending(db) -> dict:
+    """Retry signals whose publish failed and whose backoff window has elapsed."""
+    now = datetime.now(timezone.utc).isoformat()
+    cursor = db.signals.find(
+        {
+            "publish_status": "failed",
+            "publish_retry_count": {"$lt": 5},
+            "publish_next_retry_at": {"$lte": now, "$ne": None},
+        },
+        {"_id": 0},
+    )
+    docs = await cursor.to_list(100)
+    ok = 0
+    fail = 0
+    for d in docs:
+        r = await publish_signal(db, d["id"])
+        if r.get("ok"):
+            ok += 1
+        else:
+            fail += 1
+    return {"attempted": len(docs), "ok": ok, "failed": fail, "ran_at": _now()}

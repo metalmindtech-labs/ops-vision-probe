@@ -71,8 +71,22 @@ export default function ConversionPanel({
 
     const trigger = async () => {
         setForging(true);
-        await onTriggerSyllabus(signal.id);
-        setForging(false);
+        try {
+            await stream.start(signal.id, {
+                onDone: () => {
+                    toast.success("Syllabus streamed", {
+                        description: "Modules synthesized by Claude Sonnet 4.5.",
+                    });
+                },
+            });
+            if (onPublished) await onPublished();
+        } catch (e) {
+            toast.error("Stream failed", { description: e?.message });
+            // Fallback to non-streaming call
+            await onTriggerSyllabus(signal.id);
+        } finally {
+            setForging(false);
+        }
     };
 
     const publish = async () => {
@@ -411,18 +425,18 @@ export default function ConversionPanel({
                             <Button
                                 data-testid={DASHBOARD.triggerSyllabus}
                                 onClick={trigger}
-                                disabled={forging}
+                                disabled={forging || stream.streaming}
                                 className="w-full rounded-sm bg-lime-400 hover:bg-lime-300 text-black font-mono text-sm uppercase tracking-[0.2em] font-bold py-6 disabled:opacity-60 group"
                             >
-                                {forging ? (
+                                {forging || stream.streaming ? (
                                     <>
-                                        <Sparkles className="h-4 w-4 mr-2 animate-pulse" />
-                                        Forging Syllabus…
+                                        <Activity className="h-4 w-4 mr-2 animate-pulse" />
+                                        Streaming {stream.modules.length}/6…
                                     </>
                                 ) : (
                                     <>
                                         <Zap className="h-4 w-4 mr-2 group-hover:translate-x-0.5 transition-transform" />
-                                        Trigger LearnForge Syllabus Generation
+                                        Stream LearnForge Syllabus (Claude 4.5)
                                     </>
                                 )}
                             </Button>
@@ -438,10 +452,17 @@ export default function ConversionPanel({
                             </a>
                         </section>
 
-                        {signal.syllabus_generated && (
+                        {(signal.syllabus_generated || stream.modules.length > 0) && (
                             <>
                                 <Separator className="bg-zinc-800" />
-                                <SyllabusList modules={signal.syllabus_modules} />
+                                <SyllabusList
+                                    modules={
+                                        stream.modules.length > 0
+                                            ? stream.modules
+                                            : signal.syllabus_modules
+                                    }
+                                    streaming={stream.streaming}
+                                />
                             </>
                         )}
 
