@@ -218,7 +218,7 @@ export default function Dashboard() {
             className="min-h-screen bg-zinc-950 text-zinc-50 grid-bg"
         >
             <div className="scanline min-h-screen">
-                <div className="mx-auto max-w-[1480px] px-4 sm:px-6 lg:px-8 py-6 lg:py-10">
+                <div className="mx-auto max-w-[1480px] px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-10 pb-24 md:pb-10">
                     <DashboardHeader
                         onAdd={handleCreate}
                         onRefresh={refresh}

@@ -91,8 +91,8 @@ export default function SignalTable({
                 </span>
             </div>
 
-            <div className="overflow-x-auto">
-                <Table data-testid={DASHBOARD.signalTable}>
+            <div className="overflow-x-auto -mx-px">
+                <Table data-testid={DASHBOARD.signalTable} className="min-w-[760px]">
                     <TableHeader>
                         <TableRow className="border-zinc-800 hover:bg-transparent">
                             <TableHead className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 w-[38%]">

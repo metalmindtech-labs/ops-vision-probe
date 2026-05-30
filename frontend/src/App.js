@@ -2,6 +2,7 @@ import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Dashboard from "@/pages/Dashboard";
 import { Toaster } from "@/components/ui/sonner";
+import { InstallPromptBanner } from "@/components/PWAInstall";
 
 function App() {
     return (
@@ -11,6 +12,7 @@ function App() {
                     <Route path="/" element={<Dashboard />} />
                 </Routes>
             </BrowserRouter>
+            <InstallPromptBanner />
             <Toaster
                 position="bottom-right"
                 theme="dark"

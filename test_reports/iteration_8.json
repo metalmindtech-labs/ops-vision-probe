@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 8 frontend-only verification of (1) Signal Velocity strike-attribution rings post-epoch fix and (2) PWA + mobile-friendliness rollout. Strike rings now render correctly: 6 ReferenceDot ring circles on the chart (fill=none, strokes #f87171 red / #fbbf24 amber / #a3e635 lime) with matching velocity-strike-* test ids, persisting across 6H/24H/7D toggles (6/6/6). All PWA static assets (manifest.json, sw.js, icon-192/512, apple-touch-icon, favicon-64) return HTTP 200 with correct content types, and manifest reports name='LearnForge Opportunity Radar' with 192/512 icons. PWA install button + banner correctly absent in Chromium-desktop / Chromium-mobile-emulation because beforeinstallprompt does not fire in the headless test environment (this is documented in the review as conditional/skip). One real mobile bug found: velocity legend buttons overflow the 390px viewport (button width=424px, right=449px) producing a 59px horizontal body scroll on mobile. Header, tablet 768px, and signal-tracker table (wrapped in overflow-x:auto) are clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "SignalVelocityChart legend (mobile)",
+        "issue": "On 390px viewport, velocity-legend-* buttons render at 424px wide (e.g. 'Cracking the MBB Consulting Case Inte... 104K P100 4-strike-badge'), pushing past the viewport to right=449px. This causes a 59px horizontal scroll on the document body (bodyW=449 vs docW=390). Header (366px) and tablet 768px are fine; only the chart legend overflows. Fix: truncate the title span (e.g. max-w + truncate) and/or wrap the legend row, since current row already has flex-wrap but the inner button is a single non-shrinking flex line.",
+        "selector": "[data-testid^='velocity-legend-']",
+        "priority": "MEDIUM"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mobile 390x844 velocity chart card", "issues": ["Legend buttons overflow card width — visible as 59px body horizontal scroll. Recommend min-w-0 + truncate on the title span inside InteractiveLegendButton."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix mobile overflow in SignalVelocityChart legend buttons: add `min-w-0 truncate` to the title span (or shrink badges) so the legend respects the 390px chart card width. Currently width=424px causes body horizontal scroll on mobile.",
+    "(Optional, low-priority) Recharts emits 'width(-1) and height(-1)' warnings on first render — implies the ResponsiveContainer briefly mounts with collapsed dimensions. Cosmetic console noise only."
+  ],
+  "critical_code_review_comments": [
+    "SignalVelocityChart.jsx legend row already uses flex-wrap, but the per-signal button itself has no internal truncate, so a long event title forces the button to >390px and breaks mobile layout. Recommend wrapping the title in a `min-w-0 truncate` span and giving the button `max-w-full` so it shrinks within the wrapped row.",
+    "PWAInstall.jsx correctly gates banner on `installable || isIOS` and persists dismiss in localStorage. Behaviour is OS/browser-gated and cannot be reliably exercised in Chromium headless — acceptable per review brief."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only iteration)", "frontend": "92% (strike rings + PWA assets fully pass; one mobile legend overflow regression)"},
+  "test_credentials": "N/A - no auth",
+  "seed_data_creation": "None",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Strike-rings fix is verified working at runtime: 6 colored rings present with correct stroke colors (#f87171/#fbbf24/#a3e635), velocity-strike-* test ids count = 6, rings persist on 6H/24H/7D toggles. PWA assets all 200 OK with correct MIME types. The only frontend gap is mobile legend overflow at 390px (body=449px). Re-test on mobile 390x844 after main agent applies truncate to legend title span — measure `document.body.scrollWidth` should equal `documentElement.clientWidth`. Install button / banner are correctly absent in headless Chromium (conditional on beforeinstallprompt) — do not flag.",
+  "rca of the issue": "Mobile horizontal scroll RCA: in SignalVelocityChart.jsx the legend row is a flex container with `flex-wrap`, so individual legend pills wrap to new lines as expected. However the legend BUTTON itself contains a long title text + multiple inline badges with no truncate/min-w-0, so a single legend item can exceed 100% of its parent width. Measured: button width=424px on a 390px viewport, with the button starting at x=25 and ending at x=449. This pushes the body's scrollWidth to 449 even though every other section (header=366, table wrapped in overflow-x:auto) is contained. Fix is a one-line Tailwind change: add `min-w-0` to the button (or to its parent flex item) and `truncate` to the title span."
+}

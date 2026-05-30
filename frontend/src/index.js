@@ -21,3 +21,13 @@ root.render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Register service worker (PWA install + offline shell).
+// Disabled in dev to avoid hot-reload stale caches.
+if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch((err) => console.warn("SW registration failed:", err));
+  });
+}

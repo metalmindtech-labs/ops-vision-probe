@@ -145,11 +145,15 @@ export default function SignalVelocityChart() {
                 });
             }
         }
-        // Force a stable X-axis window so sparse real data + older strikes
-        // remain visible inside the chosen lookback.
+        // Force a stable X-axis window (epoch ms — XAxis is type="number")
+        // so sparse real data + older strikes remain visible in lookback.
         const now = Date.now();
         const cutoff = now - hours * 3600 * 1000;
-        const xDomain = [new Date(cutoff).toISOString(), new Date(now).toISOString()];
+        const xDomain = [cutoff, now];
+        // Normalize strike x to epoch ms (XAxis is type="number")
+        for (const st of flatStrikes) {
+            st.tEpoch = new Date(st.t).getTime();
+        }
         return {
             merged: sorted,
             series: data.series,
@@ -173,8 +177,8 @@ export default function SignalVelocityChart() {
             data-testid={DASHBOARD.velocityChart}
             className="border border-zinc-800 bg-zinc-900/30 rounded-sm terminal-shadow"
         >
-            <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 flex-wrap gap-3">
-                <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between px-3 sm:px-5 py-3 border-b border-zinc-800 flex-wrap gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                     <span className="h-2 w-2 rounded-full bg-lime-400 pulse-lime" />
                     <h2 className="font-mono text-sm uppercase tracking-[0.25em] text-zinc-300 inline-flex items-center gap-2">
                         <TrendingUp className="h-3.5 w-3.5 text-lime-400" />
@@ -190,7 +194,7 @@ export default function SignalVelocityChart() {
                             key={r.hours}
                             data-testid={DASHBOARD.velocityRangeBtn(r.label)}
                             onClick={() => setHours(r.hours)}
-                            className={`px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
+                            className={`px-3 py-1.5 sm:px-2.5 sm:py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
                                 hours === r.hours
                                     ? "bg-lime-400 text-black"
                                     : "text-zinc-400 hover:text-zinc-50 hover:bg-zinc-800"
@@ -202,7 +206,7 @@ export default function SignalVelocityChart() {
                 </div>
             </div>
 
-            <div className="p-5 pt-4">
+            <div className="p-3 sm:p-5 pt-4">
                 {loading && (
                     <div className="h-64 flex items-center justify-center font-mono text-[11px] uppercase tracking-[0.25em] text-zinc-600">
                         <Activity className="h-3 w-3 mr-2 animate-pulse text-lime-400" />
@@ -308,7 +312,7 @@ export default function SignalVelocityChart() {
                                                 data-testid={DASHBOARD.velocityStrikeDot(
                                                     st.alert_id
                                                 )}
-                                                x={st.t}
+                                                x={st.tEpoch}
                                                 y={st.v}
                                                 r={6}
                                                 fill="none"
