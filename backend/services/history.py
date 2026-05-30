@@ -1,19 +1,17 @@
 """Time-series history for signals (the "velocity chart" data source).
 
-Every scraper update inserts a snapshot row into ``signal_history``. The
-velocity endpoint aggregates these snapshots so the dashboard can render
-a lime-on-charcoal multi-series chart showing the exact moment demand
-for a course topic accelerates.
+Every scrape persists a real snapshot row into ``signal_history``. We also
+take a full-catalog snapshot on every scheduled run so every tracked
+signal gets a data point at the 12h cadence — even if the live listing
+didn't return it that round.
 
-For demo readability we also backfill ~24h of synthetic history for
-each existing signal on first boot — a smooth random walk ending at the
-current registration count.
+The chart sharpens over time as real snapshots accumulate. Any synthetic
+backfill is opt-in via ``backfill_synthetic`` and now defaults off.
 """
 
 from __future__ import annotations
 
 import logging
-import random
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
@@ -45,34 +43,54 @@ async def history_count(db) -> int:
     return await db.signal_history.count_documents({})
 
 
+async def purge_synthetic(db) -> int:
+    """Remove any rows seeded as synthetic backfill (one-time cleanup)."""
+    res = await db.signal_history.delete_many({"synthetic": True})
+    return res.deleted_count
+
+
+async def snapshot_all_signals(db, source: str = "manual") -> dict:
+    """Insert a history row for every currently-tracked signal.
+
+    Called from the scheduled scrape job (so every signal has a fresh
+    data point every 12h regardless of whether Leland returned it) and
+    once at boot if the collection is empty.
+    """
+    signals = await db.signals.find(
+        {}, {"_id": 0, "id": 1, "registration_count": 1, "priority_score": 1}
+    ).to_list(2000)
+    captured_at = _now_iso()
+    if not signals:
+        return {"snapshotted": 0, "source": source, "captured_at": captured_at}
+    docs = [
+        {
+            "signal_id": s["id"],
+            "registration_count": int(s.get("registration_count") or 0),
+            "priority_score": int(s.get("priority_score") or 0),
+            "captured_at": captured_at,
+            "source": source,
+        }
+        for s in signals
+    ]
+    await db.signal_history.insert_many(docs)
+    return {"snapshotted": len(docs), "source": source, "captured_at": captured_at}
+
+
 async def get_velocity(
     db,
     signal_ids: Iterable[str] | None = None,
     hours: int = 24,
     limit_signals: int = 12,
 ) -> dict:
-    """Return time-series snapshots for the requested signals.
-
-    Output:
-    {
-      "window_hours": 24,
-      "series": [
-         {"signal_id": "...", "title": "...", "category": "...",
-          "priority_score": 94, "current": 1228,
-          "points": [{"t": "ISO", "v": 100}, ...]}
-      ]
-    }
-    """
-    # Pick the signals
+    """Return time-series snapshots + strike attribution for top-N signals."""
     q: dict = {}
     if signal_ids:
         q["id"] = {"$in": list(signal_ids)}
     cursor = db.signals.find(q, {"_id": 0}).sort("priority_score", -1)
     signals = await cursor.to_list(min(limit_signals, 50))
 
-    cutoff = (
-        datetime.now(timezone.utc) - timedelta(hours=hours)
-    ).isoformat()
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(hours=hours)
+    cutoff = cutoff_dt.isoformat()
 
     series: list[dict] = []
     for s in signals:
@@ -84,6 +102,30 @@ async def get_velocity(
             {"t": r["captured_at"], "v": r["registration_count"]}
             for r in rows
         ]
+
+        # Strike attribution: alerts that fired in this window
+        alerts = await db.signal_alerts.find(
+            {"signal_id": s["id"], "detected_at": {"$gte": cutoff}},
+            {"_id": 0},
+        ).sort("detected_at", 1).to_list(200)
+        strikes = [
+            {
+                "alert_id": a["id"],
+                "t": a["detected_at"],
+                "v": a["new_count"],
+                "prev_count": a["prev_count"],
+                "delta_pct": a["delta_pct"],
+                "tier": (
+                    "breakout"
+                    if a["delta_pct"] >= 100
+                    else "surge"
+                    if a["delta_pct"] >= 50
+                    else "strike"
+                ),
+            }
+            for a in alerts
+        ]
+
         series.append(
             {
                 "signal_id": s["id"],
@@ -92,57 +134,16 @@ async def get_velocity(
                 "priority_score": s.get("priority_score") or 0,
                 "current": s.get("registration_count") or 0,
                 "points": points,
+                "strikes": strikes,
             }
         )
     return {"window_hours": hours, "series": series}
 
 
 async def backfill_synthetic(db, hours: int = 24, step_minutes: int = 30) -> dict:
-    """Seed a believable random-walk history for any signal that has none.
+    """Opt-in: seed synthetic random-walk history for empty signals.
 
-    Only runs for signals that lack history. Produces a monotone-ish curve
-    ending at the current registration_count.
+    DISABLED in normal operation — call only via dev/debug. Kept here so
+    the function reference in old code paths doesn't break.
     """
-    signals = await db.signals.find({}, {"_id": 0}).to_list(2000)
-    seeded = 0
-    skipped = 0
-    now = datetime.now(timezone.utc)
-    for s in signals:
-        sid = s["id"]
-        existing = await db.signal_history.count_documents({"signal_id": sid})
-        if existing > 0:
-            skipped += 1
-            continue
-
-        current = int(s.get("registration_count") or 0)
-        priority = int(s.get("priority_score") or 0)
-        steps = max(2, (hours * 60) // step_minutes)
-        # Start ~70-90% of current so the line trends up to NOW
-        start = int(current * random.uniform(0.55, 0.85)) if current else 0
-        # Generate monotone-ish points with small dips
-        docs: list[dict] = []
-        prev = start
-        rng = random.Random(hash(sid) & 0xFFFFFFFF)
-        for i in range(steps):
-            ts = now - timedelta(minutes=step_minutes * (steps - 1 - i))
-            # Linear baseline from start → current
-            baseline = start + (current - start) * (i / (steps - 1)) if steps > 1 else current
-            jitter = rng.uniform(-0.02, 0.04) * max(current, 30)
-            val = int(max(prev - 1, baseline + jitter))
-            # Final point pinned to current
-            if i == steps - 1:
-                val = current
-            prev = val
-            docs.append(
-                {
-                    "signal_id": sid,
-                    "registration_count": val,
-                    "priority_score": priority,
-                    "captured_at": ts.isoformat(),
-                    "synthetic": True,
-                }
-            )
-        if docs:
-            await db.signal_history.insert_many(docs)
-            seeded += 1
-    return {"seeded": seeded, "skipped": skipped}
+    return {"seeded": 0, "skipped": -1, "disabled": True}

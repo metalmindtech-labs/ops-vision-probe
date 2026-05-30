@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 7 full-stack testing: strike-attribution on /api/signals/velocity + signal_history hygiene. Backend 13/13 iter-7 tests pass; full regression 51/54 (3 pre-existing failures, none iter-7 regressions). Frontend velocity chart renders 6 series with strike-count badges (\u25ce 4 / \u25ce 2), 32 SVG circles, range toggles work without JS errors, and legend toggle correctly hides line + strike rings (circles drop 32\u219219).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "server.py::on_startup", "issue": "Spec says on_startup must call purge_synthetic() + snapshot_all_signals(source='boot'), but neither is invoked. Only scheduled_scrape_job calls snapshot. Functional impact today is zero (synthetic_count=0 already, history grows on every ingest), but a fresh DB will boot with 0 history rows until first scheduled scrape (12h later) or first manual scrape — chart would show 'no data in window'."},
+      {"endpoint": "tests/test_velocity_and_spec.py::TestVelocity::test_default_window", "issue": "Pre-existing test asserts \u22650 points per signal; with synthetic backfill removed in iter-7 only ~7 real points exist. Test is stale relative to iter-7 design and should be relaxed or removed."},
+      {"endpoint": "tests/test_publish_alerts.py (2 tests)", "issue": "Pre-existing flaky surge-detection tests fail because DB state has already been bumped by previous runs (signal counts above surge threshold). Unrelated to iter-7."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_velocity_strikes_iter7.py",
+    "/app/test_reports/pytest/pytest_iter7.xml"
+  ],
+  "action_items": [
+    "Add on_startup calls to purge_synthetic(db) and snapshot_all_signals(db, source='boot') in server.py to match iter-7 spec. Currently the imports exist but the calls are absent.",
+    "Optional: update tests/test_velocity_and_spec.py::test_default_window minimum points to reflect post-synthetic reality (e.g. \u22651 instead of \u226530)."
+  ],
+  "critical_code_review_comments": [
+    "server.py on_startup is missing the iter-7 mandated boot-time history bootstrap: imports for purge_synthetic and snapshot_all_signals exist (lines 30-36) but are never invoked. Add `await purge_synthetic(db)` and `await snapshot_all_signals(db, source='boot')` inside on_startup.",
+    "history.py signal_history docs lack an `id` field (only signal_id + captured_at + source). Consider adding a UUID for de-duplication and future updates.",
+    "SignalVelocityChart.jsx ReferenceDot uses ifOverflow='extendDomain' which can subtly shift xDomain when strikes fall outside [now-hours, now]. Visual behaviour is acceptable but worth noting."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_velocity_strikes_iter7.py (new)"
+  ],
+  "success_rate": {"backend": "94% (51/54 overall, 13/13 iter-7 specific)", "frontend": "100%"},
+  "test_credentials": "N/A - no auth",
+  "seed_data_creation": "test_ingest_grows_history_and_emits_strike_in_velocity POSTs the MBB sample HTML; adds 1 history row + may add 1 strike alert.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter-7 acceptance criteria all verified at runtime: (1) /api/signals/velocity returns per-series strikes array with {alert_id, t, v, prev_count, delta_pct, tier} and tier thresholds (<50 strike / 50-99 surge / \u2265100 breakout) match spec; (2) signal_history has 0 synthetic rows; (3) ingest grows signal_history by \u22651 row; (4) ids= filter respected with strikes attached; (5) UI legend shows \u25ce N badges for MBB (4) and MBA Kickoff (2); legend toggle hides both line and strike rings (circle count 32\u219219). Only spec-deviation: on_startup does not call purge_synthetic + snapshot_all_signals — see action_items.",
+  "rca of the issue": "server.py imports purge_synthetic and snapshot_all_signals at lines 30-36 but on_startup (lines 597-630) only does seed_signals + scheduler.add_job. The scheduled_scrape_job correctly calls snapshot_all_signals(source='schedule'), so post-scrape snapshots work — but a freshly-booted DB will have empty history until either a manual /api/scraper/run is fired or 12h elapse. Fix: append two `await` lines to on_startup right after the seed block."
+}

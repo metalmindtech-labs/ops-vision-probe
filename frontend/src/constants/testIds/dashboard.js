@@ -27,6 +27,7 @@ export const DASHBOARD = {
     velocityChart: "signal-velocity-chart",
     velocityRangeBtn: (label) => `velocity-range-${label.toLowerCase()}`,
     velocityLegendItem: (id) => `velocity-legend-${id}`,
+    velocityStrikeDot: (alertId) => `velocity-strike-${alertId}`,
     payloadSpecBtn: "payload-spec-btn",
     payloadSpecDialog: "payload-spec-dialog",
     signalTable: "signal-tracker-table",

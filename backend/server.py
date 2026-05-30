@@ -27,7 +27,13 @@ from services.publisher import (
 )
 from services.alerts import list_alerts, ack_alert, ack_all
 from services.whatsapp import get_status as whatsapp_status, send_whatsapp
-from services.history import get_velocity, backfill_synthetic, history_count
+from services.history import (
+    get_velocity,
+    backfill_synthetic,
+    history_count,
+    purge_synthetic,
+    snapshot_all_signals,
+)
 from services.payload_spec import (
     PUBLISH_PAYLOAD_SPEC,
     PUBLISH_PAYLOAD_EXAMPLE,
@@ -570,6 +576,11 @@ async def scheduled_scrape_job():
     try:
         result = await run_scrape(db, trigger="schedule")
         logger.info("Scheduled scrape OK: %s", result)
+        # Snapshot every tracked signal so the velocity chart has a real
+        # data point at the 12h cadence even if Leland didn't return that
+        # event this round.
+        snap = await snapshot_all_signals(db, source="schedule")
+        logger.info("Scheduled snapshot: %s", snap)
     except Exception as e:  # noqa: BLE001
         logger.exception("Scheduled scrape failed: %s", e)
 

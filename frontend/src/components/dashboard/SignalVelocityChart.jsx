@@ -7,6 +7,7 @@ import {
     Tooltip,
     ResponsiveContainer,
     CartesianGrid,
+    ReferenceDot,
 } from "recharts";
 import { VelocityAPI } from "@/lib/api";
 import { TrendingUp, Activity } from "lucide-react";
@@ -28,8 +29,8 @@ const SERIES_COLORS = [
     "#f472b6", // pink 400
 ];
 
-function fmtTime(iso, hours) {
-    const d = new Date(iso);
+function fmtTime(epoch, hours) {
+    const d = new Date(epoch);
     if (hours <= 24) {
         return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
     }
@@ -43,7 +44,7 @@ function fmtNumber(n) {
 
 function TerminalTooltip({ active, payload, label, hours, seriesIndex }) {
     if (!active || !payload || !payload.length) return null;
-    const d = new Date(label);
+    const d = new Date(typeof label === "number" ? label : Date.parse(label));
     return (
         <div className="border border-lime-400/40 bg-zinc-950/95 backdrop-blur px-3 py-2 rounded-sm font-mono text-[11px] shadow-lg">
             <div className="text-zinc-500 mb-1 uppercase tracking-wider">
@@ -93,13 +94,23 @@ export default function SignalVelocityChart() {
         };
     }, [hours]);
 
-    const { merged, series, seriesIndex } = useMemo(() => {
-        if (!data?.series) return { merged: [], series: [], seriesIndex: {} };
+    const { merged, series, seriesIndex, strikes, xDomain } = useMemo(() => {
+        if (!data?.series)
+            return { merged: [], series: [], seriesIndex: {}, strikes: [], xDomain: undefined };
         const tBuckets = new Map();
         for (const s of data.series) {
             for (const p of s.points) {
-                if (!tBuckets.has(p.t)) tBuckets.set(p.t, { t: p.t });
-                tBuckets.get(p.t)[s.signal_id] = p.v;
+                const epoch = new Date(p.t).getTime();
+                if (!tBuckets.has(epoch)) tBuckets.set(epoch, { t: epoch });
+                tBuckets.get(epoch)[s.signal_id] = p.v;
+            }
+        }
+        // Include strike timestamps so the auto-domain X-axis extends to
+        // cover them and ReferenceDots fall inside the visible range.
+        for (const s of data.series) {
+            for (const st of s.strikes || []) {
+                const epoch = new Date(st.t).getTime();
+                if (!tBuckets.has(epoch)) tBuckets.set(epoch, { t: epoch });
             }
         }
         const idx = {};
@@ -112,9 +123,7 @@ export default function SignalVelocityChart() {
                 color: SERIES_COLORS[i % SERIES_COLORS.length],
             };
         });
-        const sorted = [...tBuckets.values()].sort(
-            (a, b) => new Date(a.t) - new Date(b.t)
-        );
+        const sorted = [...tBuckets.values()].sort((a, b) => a.t - b.t);
         // Fill forward to keep lines continuous when a snapshot is missing
         const last = {};
         for (const row of sorted) {
@@ -123,8 +132,32 @@ export default function SignalVelocityChart() {
                 else if (last[s.signal_id] != null) row[s.signal_id] = last[s.signal_id];
             }
         }
-        return { merged: sorted, series: data.series, seriesIndex: idx };
-    }, [data]);
+        // Flatten strikes with per-series colour for ReferenceDot rendering
+        const flatStrikes = [];
+        for (const s of data.series) {
+            const color = idx[s.signal_id].color;
+            for (const st of s.strikes || []) {
+                flatStrikes.push({
+                    ...st,
+                    signal_id: s.signal_id,
+                    title: s.title,
+                    color,
+                });
+            }
+        }
+        // Force a stable X-axis window so sparse real data + older strikes
+        // remain visible inside the chosen lookback.
+        const now = Date.now();
+        const cutoff = now - hours * 3600 * 1000;
+        const xDomain = [new Date(cutoff).toISOString(), new Date(now).toISOString()];
+        return {
+            merged: sorted,
+            series: data.series,
+            seriesIndex: idx,
+            strikes: flatStrikes,
+            xDomain,
+        };
+    }, [data, hours]);
 
     const toggle = (id) => {
         setHiddenIds((prev) => {
@@ -196,6 +229,9 @@ export default function SignalVelocityChart() {
                                     />
                                     <XAxis
                                         dataKey="t"
+                                        type="number"
+                                        scale="time"
+                                        domain={xDomain || ["auto", "auto"]}
                                         tickFormatter={(v) => fmtTime(v, hours)}
                                         stroke="#52525b"
                                         tick={{
@@ -241,17 +277,59 @@ export default function SignalVelocityChart() {
                                                 SERIES_COLORS[i % SERIES_COLORS.length]
                                             }
                                             strokeWidth={1.5}
-                                            dot={false}
+                                            dot={{
+                                                r: 2,
+                                                fill: SERIES_COLORS[i % SERIES_COLORS.length],
+                                                strokeWidth: 0,
+                                            }}
                                             activeDot={{
                                                 r: 3,
                                                 stroke: "#000",
                                                 strokeWidth: 1,
                                             }}
+                                            connectNulls
                                             isAnimationActive
                                             animationDuration={650}
                                             hide={hiddenIds.has(s.signal_id)}
                                         />
                                     ))}
+                                    {/* Strike-attribution rings */}
+                                    {strikes.map((st) => {
+                                        if (hiddenIds.has(st.signal_id)) return null;
+                                        const ringColor =
+                                            st.tier === "breakout"
+                                                ? "#f87171" // red-400
+                                                : st.tier === "surge"
+                                                  ? "#fbbf24" // amber-400
+                                                  : "#a3e635"; // lime-400
+                                        return (
+                                            <ReferenceDot
+                                                key={st.alert_id}
+                                                data-testid={DASHBOARD.velocityStrikeDot(
+                                                    st.alert_id
+                                                )}
+                                                x={st.t}
+                                                y={st.v}
+                                                r={6}
+                                                fill="none"
+                                                stroke={ringColor}
+                                                strokeWidth={2}
+                                                ifOverflow="extendDomain"
+                                            >
+                                                <title>
+                                                    {st.tier.toUpperCase()} ·{" "}
+                                                    {st.title} ·{" "}
+                                                    {st.prev_count.toLocaleString()}{" "}
+                                                    →{" "}
+                                                    {Number(
+                                                        st.v
+                                                    ).toLocaleString()}{" "}
+                                                    ({st.delta_pct > 0 ? "+" : ""}
+                                                    {st.delta_pct}%)
+                                                </title>
+                                            </ReferenceDot>
+                                        );
+                                    })}
                                 </LineChart>
                             </ResponsiveContainer>
                         </div>
@@ -291,6 +369,14 @@ export default function SignalVelocityChart() {
                                         >
                                             p{s.priority_score}
                                         </span>
+                                        {s.strikes && s.strikes.length > 0 && (
+                                            <span
+                                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm border border-red-400/40 text-red-300"
+                                                title={`${s.strikes.length} strike(s) in window`}
+                                            >
+                                                ◎ {s.strikes.length}
+                                            </span>
+                                        )}
                                     </button>
                                 );
                             })}
