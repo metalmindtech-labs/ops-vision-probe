@@ -34,3 +34,21 @@ export const ScraperAPI = {
     runs: (limit = 10) =>
         client.get(`/scraper/runs?limit=${limit}`).then((r) => r.data),
 };
+
+export const PublishAPI = {
+    publish: (id) =>
+        client
+            .post(`/signals/${id}/publish`, null, { timeout: 30000 })
+            .then((r) => r.data),
+    preview: (id) =>
+        client.get(`/signals/${id}/publish/preview`).then((r) => r.data),
+};
+
+export const AlertsAPI = {
+    list: (onlyUnack = true) =>
+        client
+            .get(`/alerts?only_unack=${onlyUnack ? "true" : "false"}`)
+            .then((r) => r.data),
+    ack: (id) => client.post(`/alerts/${id}/ack`).then((r) => r.data),
+    ackAll: () => client.post(`/alerts/ack-all`).then((r) => r.data),
+};

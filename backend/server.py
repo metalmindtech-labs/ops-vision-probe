@@ -16,6 +16,8 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from services.ingestion import run_scrape, ingest_html, latest_run
 from services.ai import generate_syllabus_ai
+from services.publisher import publish_signal, build_payload
+from services.alerts import list_alerts, ack_alert, ack_all
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -91,6 +93,11 @@ class Signal(SignalBase):
     paid_offer_slug: Optional[str] = None
     syllabus_generated: bool = False
     syllabus_modules: List[dict] = Field(default_factory=list)
+    publish_status: Optional[str] = None
+    last_published_at: Optional[str] = None
+    last_publish_error: Optional[str] = None
+    last_publish_status_code: Optional[int] = None
+    published_to_url: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 
@@ -241,6 +248,42 @@ async def scraper_runs(limit: int = 20):
         .to_list(min(max(limit, 1), 200))
     )
     return docs
+
+
+# -------- Publish & Alerts --------
+
+@api_router.post("/signals/{signal_id}/publish")
+async def publish_signal_route(signal_id: str):
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return await publish_signal(db, signal_id)
+
+
+@api_router.get("/signals/{signal_id}/publish/preview")
+async def publish_preview(signal_id: str):
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return build_payload(existing)
+
+
+@api_router.get("/alerts")
+async def alerts_list(only_unack: bool = True, limit: int = 50):
+    return await list_alerts(db, only_unack=only_unack, limit=limit)
+
+
+@api_router.post("/alerts/{alert_id}/ack")
+async def alerts_ack(alert_id: str):
+    doc = await ack_alert(db, alert_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return doc
+
+
+@api_router.post("/alerts/ack-all")
+async def alerts_ack_all():
+    return {"acknowledged": await ack_all(db)}
 
 
 @api_router.post("/signals/seed")

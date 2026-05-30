@@ -18,6 +18,7 @@ from services.scraper import (
     ScrapedEvent,
 )
 from services.ai import enrich_signal
+from services.alerts import is_strike, record_strike
 
 logger = logging.getLogger(__name__)
 
@@ -49,24 +50,31 @@ async def ingest_events(
                 {"event_title": ev.event_title}, {"_id": 0}
             )
             if existing:
+                old_count = existing.get("registration_count", 0) or 0
+                new_count = max(old_count, ev.registration_count)
                 patch = {
-                    "registration_count": max(
-                        existing.get("registration_count", 0),
-                        ev.registration_count,
-                    ),
+                    "registration_count": new_count,
                     "source_url": existing.get("source_url") or ev.source,
                     "updated_at": _now(),
                     "last_seen_at": _now(),
                 }
                 # Bump priority slightly if registrations grew >10%
-                old = existing.get("registration_count", 0)
-                if ev.registration_count > old * 1.1 and old > 0:
+                if ev.registration_count > old_count * 1.1 and old_count > 0:
                     patch["priority_score"] = min(
                         100, (existing.get("priority_score") or 60) + 2
                     )
                 await db.signals.update_one(
                     {"event_title": ev.event_title}, {"$set": patch}
                 )
+                # Strike detection: surge alert
+                if is_strike(old_count, ev.registration_count):
+                    await record_strike(
+                        db,
+                        signal_id=existing.get("id"),
+                        signal_title=ev.event_title,
+                        prev_count=old_count,
+                        new_count=ev.registration_count,
+                    )
                 updated += 1
                 continue
 

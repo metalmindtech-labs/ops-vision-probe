@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { SignalsAPI, ScraperAPI } from "@/lib/api";
+import { SignalsAPI, ScraperAPI, AlertsAPI } from "@/lib/api";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 import DashboardHeader from "@/components/dashboard/DashboardHeader";
 import StatGrid from "@/components/dashboard/StatGrid";
@@ -11,11 +11,13 @@ import LelandCTAStrip from "@/components/dashboard/LelandCTAStrip";
 import CategoryBreakdown from "@/components/dashboard/CategoryBreakdown";
 import ScraperStatusBar from "@/components/dashboard/ScraperStatusBar";
 import PasteHtmlDialog from "@/components/dashboard/PasteHtmlDialog";
+import StrikeAlertsBanner from "@/components/dashboard/StrikeAlertsBanner";
 
 export default function Dashboard() {
     const [signals, setSignals] = useState([]);
     const [stats, setStats] = useState(null);
     const [scraperStatus, setScraperStatus] = useState(null);
+    const [alerts, setAlerts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [formOpen, setFormOpen] = useState(false);
     const [editing, setEditing] = useState(null);
@@ -25,14 +27,16 @@ export default function Dashboard() {
 
     const refresh = async () => {
         try {
-            const [list, st, scStatus] = await Promise.all([
+            const [list, st, scStatus, al] = await Promise.all([
                 SignalsAPI.list(),
                 SignalsAPI.stats(),
                 ScraperAPI.status().catch(() => null),
+                AlertsAPI.list(true).catch(() => []),
             ]);
             setSignals(list);
             setStats(st);
             setScraperStatus(scStatus);
+            setAlerts(al);
         } catch (e) {
             toast.error("Failed to load signals", {
                 description: e?.message ?? "Network error",
@@ -151,6 +155,29 @@ export default function Dashboard() {
         }
     };
 
+    const handleAckAlert = async (id) => {
+        try {
+            await AlertsAPI.ack(id);
+            setAlerts((a) => a.filter((x) => x.id !== id));
+        } catch (e) {
+            toast.error("Dismiss failed", { description: e?.message });
+        }
+    };
+
+    const handleAckAll = async () => {
+        try {
+            await AlertsAPI.ackAll();
+            setAlerts([]);
+            toast.success("All strike alerts cleared");
+        } catch (e) {
+            toast.error("Dismiss-all failed", { description: e?.message });
+        }
+    };
+
+    const handleJumpToSignal = (id) => {
+        setConversionId(id);
+    };
+
     return (
         <div
             data-testid={DASHBOARD.root}
@@ -167,6 +194,13 @@ export default function Dashboard() {
                     />
 
                     <ScraperStatusBar status={scraperStatus} />
+
+                    <StrikeAlertsBanner
+                        alerts={alerts}
+                        onAck={handleAckAlert}
+                        onAckAll={handleAckAll}
+                        onJump={handleJumpToSignal}
+                    />
 
                     <StatGrid stats={stats} loading={loading} />
 
@@ -201,6 +235,7 @@ export default function Dashboard() {
                 onOpenChange={(v) => !v && setConversionId(null)}
                 onSave={handleConversionSave}
                 onTriggerSyllabus={handleTriggerSyllabus}
+                onPublished={refresh}
             />
 
             <PasteHtmlDialog

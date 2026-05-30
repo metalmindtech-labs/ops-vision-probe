@@ -36,7 +36,7 @@ function PriorityCell({ score }) {
     );
 }
 
-function StatusPill({ status }) {
+function StatusPill({ status, published }) {
     const map = {
         tracked: { label: "TRACKED", cls: "border-zinc-700 text-zinc-400" },
         converting: {
@@ -50,12 +50,23 @@ function StatusPill({ status }) {
     };
     const cfg = map[status] || map.tracked;
     return (
-        <Badge
-            variant="outline"
-            className={`rounded-sm font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 ${cfg.cls}`}
-        >
-            {cfg.label}
-        </Badge>
+        <div className="flex items-center gap-1.5 flex-wrap">
+            <Badge
+                variant="outline"
+                className={`rounded-sm font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 ${cfg.cls}`}
+            >
+                {cfg.label}
+            </Badge>
+            {published && (
+                <Badge
+                    variant="outline"
+                    className="rounded-sm font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 border-emerald-400/40 text-emerald-300 bg-emerald-400/5"
+                    title="Published to LearnForge"
+                >
+                    PUB
+                </Badge>
+            )}
+        </div>
     );
 }
 
@@ -164,7 +175,10 @@ export default function SignalTable({
                                         <PriorityCell score={s.priority_score || 0} />
                                     </TableCell>
                                     <TableCell>
-                                        <StatusPill status={s.status} />
+                                        <StatusPill
+                                            status={s.status}
+                                            published={s.publish_status === "published"}
+                                        />
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="inline-flex items-center gap-1">

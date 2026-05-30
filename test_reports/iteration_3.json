@@ -1,0 +1,26 @@
+{
+  "summary": "Iteration 3 — LearnForge Opportunity Radar: publish-to-LearnForge webhook + diff-aware strike alerts + Next.js /en/ URL refactor. Backend: 27/27 pytest passed (10 new in test_publish_alerts.py + 17 regression in test_signals.py & test_scraper.py). Frontend: all 7 required UI checks green — Strike banner with delta_pct & ack-all, Convert sheet PUBLISH section with FAILED badge, real POST returns HTTP 404 (expected) and renders publish-result-panel + error toast, CTA chips correctly emit /en/courses/ + /en/scrolls/ with zero /forgecore/ or /free/ leakage anywhere in DOM, Publish button correctly disabled for signals without a syllabus.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_publish_alerts.py",
+    "/app/backend/tests/test_signals.py",
+    "/app/backend/tests/test_scraper.py",
+    "/app/test_reports/pytest/pytest_publish_alerts.xml",
+    "/app/test_reports/pytest/pytest_regression.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "publisher.py uses httpx.AsyncClient(timeout=20) which is appropriate for fail-fast 404; on slow webhooks consider 30s. Non-blocking.",
+    "services/alerts.py STRIKE_THRESHOLD reads env at import time only — fine for current scope, but a runtime config change would require restart. Documented behavior, no action needed.",
+    "_persist() in publisher writes published_to_url even on failure (so UI can show 'would have shipped to X'). This is intentional and matches the spec, but ensure UI never treats published_to_url as truth without checking publish_status==='published'."
+  ],
+  "updated_files": ["/app/backend/tests/test_publish_alerts.py"],
+  "success_rate": { "backend": "100% (27/27)", "frontend": "100% (7/7)" },
+  "test_credentials": "none required",
+  "seed_data_creation": "Tests recreate strike alerts on demand via /api/scraper/ingest-html with the MBB surge HTML. Cleanup is implicit (ack-all). No persistent seed mutation beyond bumping MBB registration_count (which was already mutating across dev sessions).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suites: /app/backend/tests/{test_signals.py, test_scraper.py, test_publish_alerts.py}. test_publish_alerts.py covers: (a) GET /api/signals/{id}/publish/preview returns full {event,signal_id,course:{slug,title,category,summary,price_usd,lead_magnet,cta:{headline,subtext,free_url,paid_url},syllabus:{modules},demand:{registration_count,priority_score,source_url}}} with /en/courses/ and /en/scrolls/ URLs (no /forgecore/ or /free/), (b) POST /api/signals/{id}/publish to live webhook returns ok=false status_code=404 error='HTTP 404' and persists publish_status='failed' + last_publish_error + last_publish_status_code + published_to_url on the signal doc, (c) GET /api/signals/{id} includes all 5 new publish_* fields, (d) 404s for unknown signal IDs on both publish + preview, (e) /api/alerts list (only_unack defaults true) is sorted desc by detected_at, (f) POST /api/alerts/{id}/ack toggles acknowledged=true and removes alert from unack list, returns 404 on bogus id, (g) POST /api/alerts/ack-all returns {acknowledged: N} and empties unack list, (h) ingest-html with MBB surge HTML (9999 reg) triggers strike alert with delta_pct >= 20 because is_strike() threshold is 20%. Frontend Playwright validated: strike-alerts-banner shows top surge with delta_pct + Dismiss All ack-all works (toast 'All strike alerts cleared'), Convert sheet's PUBLISH TO LEARNFORGE section renders publish-status-badge='FAILED' after a real POST, publish-result-panel shows 'webhook failed HTTP 404 → https://learnforge-core.vercel.app/api/courses {detail: Not Found}', publish-to-learnforge-btn is disabled when syllabus_generated=false, cta-copy-free-btn shows learnforge-core.vercel.app/en/scrolls/<slug> and cta-copy-paid-btn shows /en/courses/<slug>, and full DOM scan confirms zero occurrences of '/forgecore/' or '/free/' anywhere. PUB green badge (publish_status='published') is correctly NOT shown because every publish currently fails (LearnForge hasn't shipped /api/courses yet — expected).",
+  "rca of the issue": "N/A — no bugs found. The HTTP 404 returned by the publish webhook is the documented expected state (LearnForge-core has not yet implemented /api/courses). The Radar correctly surfaces the failure as 'FAILED' badge + publish-result-panel + error toast + persisted last_publish_status_code=404 + last_publish_error='HTTP 404'."
+}

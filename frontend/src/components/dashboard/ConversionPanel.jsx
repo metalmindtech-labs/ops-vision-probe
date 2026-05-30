@@ -19,9 +19,10 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Zap, Copy, ArrowUpRight, Sparkles } from "lucide-react";
+import { Zap, Copy, ArrowUpRight, Sparkles, Rocket, CheckCircle2, XCircle } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
-import { learnforgeFreeUrl, learnforgePaidUrl } from "@/lib/learnforge";
+import { learnforgeScrollUrl, learnforgeCourseUrl } from "@/lib/learnforge";
+import { PublishAPI } from "@/lib/api";
 import CTAPreview from "@/components/dashboard/CTAPreview";
 import SyllabusList from "@/components/dashboard/SyllabusList";
 
@@ -31,10 +32,13 @@ export default function ConversionPanel({
     onOpenChange,
     onSave,
     onTriggerSyllabus,
+    onPublished,
 }) {
     const [form, setForm] = useState(null);
     const [saving, setSaving] = useState(false);
     const [forging, setForging] = useState(false);
+    const [publishing, setPublishing] = useState(false);
+    const [publishResult, setPublishResult] = useState(null);
 
     useEffect(() => {
         if (signal) {
@@ -71,6 +75,34 @@ export default function ConversionPanel({
         setForging(false);
     };
 
+    const publish = async () => {
+        setPublishing(true);
+        setPublishResult(null);
+        const t = toast.loading("Publishing to LearnForge…", {
+            description: "POST to webhook in progress.",
+        });
+        try {
+            const res = await PublishAPI.publish(signal.id);
+            setPublishResult(res);
+            if (res.ok) {
+                toast.success("Course published to LearnForge", {
+                    id: t,
+                    description: `HTTP ${res.status_code} · live at ${res.payload?.course?.cta?.paid_url || ""}`,
+                });
+                if (onPublished) await onPublished();
+            } else {
+                toast.error("Publish failed", {
+                    id: t,
+                    description: res.error || `HTTP ${res.status_code}`,
+                });
+            }
+        } catch (e) {
+            toast.error("Publish failed", { id: t, description: e?.message });
+        } finally {
+            setPublishing(false);
+        }
+    };
+
     const leadSlug = (form.lead_magnet_title || "lead-magnet")
         .toLowerCase()
         .replace(/[^a-z0-9\s-]/g, "")
@@ -82,8 +114,8 @@ export default function ConversionPanel({
         .trim()
         .replace(/\s+/g, "-");
 
-    const freeUrl = learnforgeFreeUrl(leadSlug);
-    const paidUrl = learnforgePaidUrl(paidSlug);
+    const freeUrl = learnforgeScrollUrl(leadSlug);
+    const paidUrl = learnforgeCourseUrl(paidSlug);
 
     const copy = async (text, label) => {
         try {
@@ -412,9 +444,128 @@ export default function ConversionPanel({
                                 <SyllabusList modules={signal.syllabus_modules} />
                             </>
                         )}
+
+                        <Separator className="bg-zinc-800" />
+
+                        {/* Publish to LearnForge */}
+                        <section className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-mono text-xs uppercase tracking-[0.25em] text-zinc-300">
+                                    05 · Publish to LearnForge
+                                </h3>
+                                <PublishStatusBadge signal={signal} />
+                            </div>
+                            <p className="text-xs text-zinc-400 leading-relaxed">
+                                Pipe the syllabus, CTA copy, and demand metadata
+                                directly into{" "}
+                                <span className="font-mono text-zinc-200">
+                                    learnforge-core.vercel.app
+                                </span>
+                                . The webhook payload is signed and lands on{" "}
+                                <span className="font-mono text-lime-400/80">
+                                    POST /api/courses
+                                </span>
+                                .
+                            </p>
+                            <Button
+                                data-testid={DASHBOARD.publishBtn}
+                                onClick={publish}
+                                disabled={publishing || !signal.syllabus_generated}
+                                className="w-full rounded-sm bg-zinc-50 hover:bg-white text-black font-mono text-xs uppercase tracking-[0.2em] font-bold py-5 disabled:opacity-50 group"
+                            >
+                                {publishing ? (
+                                    <>
+                                        <Rocket className="h-4 w-4 mr-2 animate-pulse" />
+                                        Publishing…
+                                    </>
+                                ) : (
+                                    <>
+                                        <Rocket className="h-4 w-4 mr-2 group-hover:-translate-y-0.5 transition-transform" />
+                                        Publish to LearnForge
+                                    </>
+                                )}
+                            </Button>
+                            {!signal.syllabus_generated && (
+                                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+                                    Generate a syllabus first to enable publishing.
+                                </p>
+                            )}
+                            {publishResult && (
+                                <PublishResultPanel result={publishResult} />
+                            )}
+                        </section>
                     </div>
                 </div>
             </SheetContent>
         </Sheet>
+    );
+}
+
+function PublishStatusBadge({ signal }) {
+    const status = signal.publish_status || "unpublished";
+    const map = {
+        published: {
+            label: "PUBLISHED",
+            cls: "border-emerald-400/40 text-emerald-300 bg-emerald-400/5",
+            icon: CheckCircle2,
+        },
+        failed: {
+            label: "FAILED",
+            cls: "border-red-400/40 text-red-300 bg-red-500/5",
+            icon: XCircle,
+        },
+        unpublished: {
+            label: "UNPUBLISHED",
+            cls: "border-zinc-700 text-zinc-400",
+            icon: null,
+        },
+    };
+    const cfg = map[status] || map.unpublished;
+    const Icon = cfg.icon;
+    return (
+        <span
+            data-testid={DASHBOARD.publishStatusBadge}
+            className={`inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider ${cfg.cls}`}
+        >
+            {Icon && <Icon className="h-3 w-3" />}
+            {cfg.label}
+        </span>
+    );
+}
+
+function PublishResultPanel({ result }) {
+    const ok = result.ok;
+    return (
+        <div
+            data-testid={DASHBOARD.publishResultPanel}
+            className={`border rounded-sm p-3 font-mono text-[11px] space-y-1 ${
+                ok
+                    ? "border-emerald-400/30 bg-emerald-400/5"
+                    : "border-red-400/30 bg-red-500/5"
+            }`}
+        >
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.2em]">
+                <span className={ok ? "text-emerald-300" : "text-red-300"}>
+                    {ok ? "✓ webhook 2xx" : "✗ webhook failed"}
+                </span>
+                <span className="text-zinc-500">
+                    {result.status_code ? `HTTP ${result.status_code}` : "no response"}
+                </span>
+            </div>
+            <div className="text-zinc-400 truncate">
+                <span className="text-zinc-600">→ </span>
+                {result.url || "—"}
+            </div>
+            {result.error && (
+                <div className="text-red-300 text-[10px] leading-relaxed">
+                    {result.error}
+                </div>
+            )}
+            {result.response_preview && (
+                <pre className="text-[10px] text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-sm p-2 overflow-x-auto max-h-32">
+                    {result.response_preview}
+                </pre>
+            )}
+        </div>
     );
 }
