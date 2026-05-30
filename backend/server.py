@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Body
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -383,6 +383,25 @@ async def integrations_publish_spec():
         "expected_response": EXPECTED_RESPONSE,
         "webhook_url": os.environ.get("LEARNFORGE_WEBHOOK_URL") or None,
     }
+
+
+@api_router.get("/integrations/handoff-doc")
+async def integrations_handoff_doc():
+    """Markdown handoff doc the Architect can copy/share with the LearnForge
+    team so they can deploy the /api/courses ingest route end-to-end."""
+    from pathlib import Path
+
+    doc_path = Path(__file__).resolve().parent.parent / "docs" / "LEARNFORGE_INGEST_SPEC.md"
+    if not doc_path.exists():
+        raise HTTPException(status_code=404, detail="Handoff doc not bundled")
+    return Response(
+        content=doc_path.read_text(encoding="utf-8"),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": 'inline; filename="LEARNFORGE_INGEST_SPEC.md"',
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 # -------- Signal velocity (time-series) --------

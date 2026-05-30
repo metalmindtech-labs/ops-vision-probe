@@ -19,6 +19,13 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v8: LearnForge Team Handoff)
+- **Single-shot handoff doc** at `/app/docs/LEARNFORGE_INGEST_SPEC.md` — 14.8 KB, 8 sections covering: endpoint to deploy, headers, full v1 payload schema + field reference, expected response, drop-in TypeScript Next.js App Router route handler (with Zod validation + `crypto.timingSafeEqual` signature verification), local curl validation, post-deploy checklist, and change log. All `/en/` legacy refs stripped — example URLs use the `/signup?course=<slug>&ref=radar&tier=<…>` form.
+- **Backend** `GET /api/integrations/handoff-doc` serves the doc as `text/markdown` with `Content-Disposition: inline; filename="LEARNFORGE_INGEST_SPEC.md"` for one-click download.
+- **Frontend** new `LearnForgeHandoffCallout` at the top of the Integrations dialog — amber callout that surfaces the 404 root cause + three actions: `Copy Handoff Doc` (clipboard), `Download .md`, `Preview` (opens markdown in a new tab).
+- **Payload-spec example modernized** — `PUBLISH_PAYLOAD_EXAMPLE` in `services/payload_spec.py` updated to the new `/signup?course=…` CTA shape so anything that reads the JSON-Schema endpoint sees the same reality.
+- Tested: 9/9 doc content checks PASS, endpoint returns 200 + correct content-type, no `/en/courses/` or `/en/scrolls/` in any served artifact.
+
 ## Implemented (2026-05-30 — v7: Architect's 3 P0 Directives)
 - **CTA routing fixed**: Replaced all `/en/courses/<slug>` and `/en/scrolls/<slug>` deep-routes (which 404 on the live LearnForge deployment) with the universal `/signup` route. All paid/free/lead-magnet CTAs now resolve to `https://learnforge-core.vercel.app/signup?course=<slug>&ref=radar&tier=<forgecore|free>` — single helper `_signup_url()` in backend `publisher.py` and matching `withRef()` in frontend `lib/learnforge.js`. Course slug + tier preserved in query string for LearnForge-side attribution.
 - **Webhook 404 diagnostic surfaced**: Backend `publisher.py` now attaches an actionable `hint` to every failure response (404, 401/403, 5xx, ConnectError, Timeout). Frontend `PublishResultPanel` renders the hint in an amber `DEBUG · …` line plus full response body and a "Copy Payload" button — Architect can now see the LearnForge `/api/courses` route is not deployed without grepping logs.

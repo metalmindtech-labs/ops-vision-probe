@@ -69,6 +69,11 @@ export const IntegrationsAPI = {
             .then((r) => r.data),
     publishSpec: () =>
         client.get(`/integrations/publish-payload-spec`).then((r) => r.data),
+    handoffDocUrl: () => `${API}/integrations/handoff-doc`,
+    handoffDoc: () =>
+        client
+            .get(`/integrations/handoff-doc`, { responseType: "text" })
+            .then((r) => r.data),
 };
 
 export const VelocityAPI = {

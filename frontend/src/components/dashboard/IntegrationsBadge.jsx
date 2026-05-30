@@ -18,6 +18,8 @@ import {
     KeyRound,
     FileJson,
     Copy,
+    Download,
+    Send,
 } from "lucide-react";
 import { IntegrationsAPI } from "@/lib/api";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
@@ -92,7 +94,12 @@ export default function IntegrationsBadge({ status, onRefresh }) {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-3 mt-2">
+                    <div className="space-y-3 mt-2 max-h-[70vh] overflow-y-auto pr-1">
+                        {/* LearnForge handoff callout — surfaces the 404 root cause
+                            and gives the Architect a one-click way to hand off the
+                            exact spec the LearnForge team needs to deploy. */}
+                        <LearnForgeHandoffCallout webhookUrl={wh?.url} />
+
                         {/* WhatsApp */}
                         <div className="border border-zinc-800 rounded-sm p-4 space-y-2">
                             <div className="flex items-center justify-between">
@@ -329,5 +336,89 @@ function PayloadSpecDialog({ open, onOpenChange, spec }) {
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+
+// LearnForge handoff callout — shows the current publish-status flag and
+// lets the Architect copy/download the full ingest spec to send to the
+// LearnForge team. Lives at the top of the Integrations dialog so the 404
+// root cause and the fix are both one click away.
+function LearnForgeHandoffCallout({ webhookUrl }) {
+    const [copying, setCopying] = useState(false);
+    const docUrl = IntegrationsAPI.handoffDocUrl();
+
+    const copy = async () => {
+        setCopying(true);
+        const t = toast.loading("Building handoff doc…");
+        try {
+            const md = await IntegrationsAPI.handoffDoc();
+            await navigator.clipboard.writeText(md);
+            toast.success("Handoff doc copied", {
+                id: t,
+                description: "Paste into Slack / GitHub issue / PR description.",
+            });
+        } catch (e) {
+            toast.error("Copy failed", { id: t, description: e?.message });
+        } finally {
+            setCopying(false);
+        }
+    };
+
+    return (
+        <div
+            data-testid={DASHBOARD.handoffCallout}
+            className="border border-amber-400/30 bg-amber-400/5 rounded-sm p-4 space-y-3"
+        >
+            <div className="flex items-start gap-3">
+                <Send className="h-4 w-4 text-amber-300 mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                    <h3 className="font-mono text-xs uppercase tracking-[0.2em] text-amber-300">
+                        LearnForge Team Handoff
+                    </h3>
+                    <p className="font-mono text-[11px] text-zinc-400 mt-1 leading-relaxed">
+                        Radar is sending the canonical{" "}
+                        <span className="text-zinc-200">course.publish</span>{" "}
+                        payload — but{" "}
+                        <span className="font-mono text-amber-300">
+                            POST {webhookUrl || "/api/courses"}
+                        </span>{" "}
+                        is still returning 404. Send this drop-in spec to the
+                        LearnForge team and publishes flip from 404 → 200 as
+                        soon as the route deploys.
+                    </p>
+                </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                    data-testid={DASHBOARD.handoffCopyBtn}
+                    onClick={copy}
+                    disabled={copying}
+                    size="sm"
+                    className="rounded-sm bg-lime-400 hover:bg-lime-300 text-black font-mono text-[10px] uppercase tracking-wider font-bold disabled:opacity-50"
+                >
+                    <Copy className="h-3 w-3 mr-1.5" />
+                    {copying ? "Copying…" : "Copy Handoff Doc"}
+                </Button>
+                <a
+                    data-testid={DASHBOARD.handoffDownloadBtn}
+                    href={docUrl}
+                    download="LEARNFORGE_INGEST_SPEC.md"
+                    className="inline-flex items-center gap-1.5 rounded-sm border border-zinc-700 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 transition-colors"
+                >
+                    <Download className="h-3 w-3" />
+                    Download .md
+                </a>
+                <a
+                    href={docUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-sm border border-zinc-700 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-wider text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 transition-colors"
+                >
+                    <FileJson className="h-3 w-3" />
+                    Preview
+                </a>
+            </div>
+        </div>
     );
 }

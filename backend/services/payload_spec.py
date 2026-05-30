@@ -98,7 +98,7 @@ PUBLISH_PAYLOAD_SPEC = {
 PUBLISH_PAYLOAD_EXAMPLE = {
     "event": "course.publish",
     "signal_id": "1e8a43c8-a6e1-4d29-aa15-e1fedde2ef73",
-    "published_at": "2026-02-29T01:24:00Z",
+    "published_at": "2026-05-30T01:24:00Z",
     "course": {
         "slug": "forgecore-mbb-case-mastery",
         "title": "ForgeCore: MBB Case Mastery",
@@ -109,13 +109,13 @@ PUBLISH_PAYLOAD_EXAMPLE = {
             "title": "The MBB Case Cheat Sheet",
             "description": "10-page distilled framework for case interview structuring.",
             "slug": "the-mbb-case-cheat-sheet",
-            "url": "https://learnforge-core.vercel.app/en/scrolls/the-mbb-case-cheat-sheet",
+            "url": "https://learnforge-core.vercel.app/signup?course=the-mbb-case-cheat-sheet&ref=radar&tier=free",
         },
         "cta": {
             "headline": "Land Your MBB Offer",
             "subtext": "Trained by ex-McKinsey EMs. Outcome-tracked.",
-            "free_url": "https://learnforge-core.vercel.app/en/scrolls/the-mbb-case-cheat-sheet",
-            "paid_url": "https://learnforge-core.vercel.app/en/courses/forgecore-mbb-case-mastery",
+            "free_url": "https://learnforge-core.vercel.app/signup?course=the-mbb-case-cheat-sheet&ref=radar&tier=free",
+            "paid_url": "https://learnforge-core.vercel.app/signup?course=forgecore-mbb-case-mastery&ref=radar&tier=forgecore",
         },
         "syllabus": {
             "modules": [
