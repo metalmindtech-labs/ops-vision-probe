@@ -24,6 +24,8 @@ from services.publisher import (
     build_payload,
     republish_all_live,
     retry_pending,
+    reconcile_with_learnforge,
+    get_publish_history,
 )
 from services.alerts import list_alerts, ack_alert, ack_all
 from services.whatsapp import get_status as whatsapp_status, send_whatsapp
@@ -385,6 +387,39 @@ async def signals_publish_all_live():
 @api_router.post("/signals/retry-pending-publishes")
 async def signals_retry_pending_publishes():
     return await retry_pending(db)
+
+
+@api_router.get("/learnforge/reconcile")
+async def learnforge_reconcile():
+    """Architect's Sync — probe LearnForge endpoint + compute catalog drift."""
+    return await reconcile_with_learnforge(db)
+
+
+@api_router.get("/signals/{signal_id}/publish-history")
+async def signal_publish_history(signal_id: str, limit: int = 10):
+    """Last N publish attempts for a signal — powers the Failed badge drilldown."""
+    history = await get_publish_history(db, signal_id, limit=limit)
+    sig = await db.signals.find_one(
+        {"id": signal_id},
+        {
+            "_id": 0,
+            "id": 1,
+            "event_title": 1,
+            "publish_status": 1,
+            "last_publish_status_code": 1,
+            "last_publish_error": 1,
+            "last_publish_hint": 1,
+            "last_publish_response_preview": 1,
+            "last_publish_webhook_url": 1,
+            "last_publish_at": 1,
+            "last_published_at": 1,
+            "publish_retry_count": 1,
+            "publish_next_retry_at": 1,
+        },
+    )
+    if not sig:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return {"signal": sig, "history": history}
 
 
 @api_router.get("/integrations/status")

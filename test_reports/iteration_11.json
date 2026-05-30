@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 11 — verified Architect's Critical Sync Debug end-to-end. Both new backend endpoints + all 3 frontend UI surfaces (Sync drift badge, Failed-badge dialog, Copy Diagnostic) are functioning correctly. 9/9 pytest passed, 12/12 UI checks passed.",
+  "backend_tested": [
+    "GET /api/learnforge/reconcile → 200; learnforge_probe.url='https://learnforge-core.vercel.app/api/courses', reachable=false, status_code=404; totals contains syllabus_generated/published/failed/pending ints; drift.count > 0 (4); drift.failed_signals[0] has id/title/status_code=404/hint mentioning 'route'+'deployed'/retry_count/next_retry_at",
+    "GET /api/signals/{id}/publish-history?limit=5 → 200; signal object contains all 9 required diag fields (publish_status, last_publish_status_code=404, last_publish_error, last_publish_hint, last_publish_response_preview, last_publish_webhook_url, last_publish_at, publish_retry_count, publish_next_retry_at); history is a list with status_code/error/hint/at per entry; unknown signal returns 404"
+  ],
+  "frontend_tested": [
+    "Dashboard loads; [data-testid='sync-drift-badge'] visible with text='4' and title='4 courses out of sync · LearnForge HTTP 404'",
+    "Click SYNC button → sonner toast 'LearnForge HTTP 404' appears",
+    "Signal Tracker row for fixture signal exposes [data-testid='publish-error-btn-e3171073-...] with label 'FAIL 404'",
+    "Click FAIL 404 → [data-testid='publish-error-dialog'] opens, contains: 'HTTP 404' banner ('404 · Route not deployed'), Webhook/HTTP/Retries(5/5)/Next retry meta grid, Diagnostic block mentioning '/api/courses route is not deployed', response body '{\"detail\":\"Not Found\"}', Last 10 Attempts list each row showing HTTP 404, footer with COPY DIAGNOSTIC + RETRY PUBLISH buttons",
+    "COPY DIAGNOSTIC button present and clickable (clipboard write not asserted in headless)"
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter11_reconcile_and_history.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "reconcile_with_learnforge correctly probes GET on the same webhook URL — note remote /api/courses likely only implements POST, so a 404/405 on GET is expected even after deployment. Today it's a true 404 (route absent). Once deployed, the probe may show 405 (method-not-allowed); consider treating 405 as 'reachable=true' since it proves the route exists. Minor — current behavior is acceptable as a strict liveness probe.",
+    "publisher._persist correctly caps retry_count at 5 and sets publish_next_retry_at=None at the cap; fixture signal is at 5/5 (terminal). Sync drift will continue to surface it indefinitely until publish succeeds — desired behavior.",
+    "PublishErrorDialog re-fetches history after a failed retry and updates state — good. classifyFailure covers 404/401/403/422/5xx/Connect/Timeout — robust.",
+    "DashboardHeader Sync button gracefully falls back from onSync to onRefresh when onSync absent — backwards compatible."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter11_reconcile_and_history.py"],
+  "success_rate": {"backend": "100% (9/9 pytest)", "frontend": "100% (12/12 UI checks)"},
+  "seed_data_creation": "none — used existing signal e3171073-0ae9-4bf8-ae9b-3bb2e303a576 as provided by main agent",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "All Architect Critical Sync Debug deliverables verified PASSING: (1) exact failure captured = HTTP 404, body '{\"detail\":\"Not Found\"}', surfaced both in drift API and in PublishErrorDialog; (2) Error Log modal opens from FAIL 404 badge with full diagnostic; (3) Sync button reconciles via /api/learnforge/reconcile and shows red drift count (4) on the badge. Regression test file: /app/backend/tests/test_iter11_reconcile_and_history.py. LearnForge receiver still not deployed, so probe.status_code=404 is the EXPECTED current state."
+}

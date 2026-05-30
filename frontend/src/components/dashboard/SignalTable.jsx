@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpRight, Pencil, Trash2, Zap } from "lucide-react";
+import { ArrowUpRight, Pencil, Trash2, Zap, AlertCircle } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 
 function PriorityCell({ score }) {
@@ -36,7 +36,14 @@ function PriorityCell({ score }) {
     );
 }
 
-function StatusPill({ status, published }) {
+function StatusPill({
+    status,
+    published,
+    failed,
+    signalId,
+    onInspectFailure,
+    lastStatusCode,
+}) {
     const map = {
         tracked: { label: "TRACKED", cls: "border-zinc-700 text-zinc-400" },
         converting: {
@@ -66,6 +73,20 @@ function StatusPill({ status, published }) {
                     PUB
                 </Badge>
             )}
+            {failed && (
+                <button
+                    data-testid={DASHBOARD.publishErrorBtn(signalId)}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onInspectFailure?.(signalId);
+                    }}
+                    title="View publish error log"
+                    className="inline-flex items-center gap-1 rounded-sm font-mono text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-red-400/40 text-red-300 bg-red-500/5 hover:bg-red-500/15 transition-colors cursor-pointer"
+                >
+                    <AlertCircle className="h-2.5 w-2.5" />
+                    FAIL {lastStatusCode ? lastStatusCode : ""}
+                </button>
+            )}
         </div>
     );
 }
@@ -76,6 +97,7 @@ export default function SignalTable({
     onConvert,
     onEdit,
     onDelete,
+    onInspectFailure,
 }) {
     return (
         <section className="border border-zinc-800 bg-zinc-900/30 rounded-sm terminal-shadow">
@@ -178,6 +200,10 @@ export default function SignalTable({
                                         <StatusPill
                                             status={s.status}
                                             published={s.publish_status === "published"}
+                                            failed={s.publish_status === "failed"}
+                                            signalId={s.id}
+                                            onInspectFailure={onInspectFailure}
+                                            lastStatusCode={s.last_publish_status_code}
                                         />
                                     </TableCell>
                                     <TableCell className="text-right">

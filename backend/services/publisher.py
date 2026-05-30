@@ -178,6 +178,9 @@ async def publish_signal(db, signal_id: str) -> dict:
         status=status,
         error=result["error"],
         status_code=result["status_code"],
+        response_preview=result.get("response_preview"),
+        hint=result.get("hint"),
+        url=result.get("url"),
     )
     return result
 
@@ -189,6 +192,9 @@ async def _persist(
     status: str,
     error: Optional[str] = None,
     status_code: Optional[int] = None,
+    response_preview: Optional[str] = None,
+    hint: Optional[str] = None,
+    url: Optional[str] = None,
 ) -> None:
     paid_url = payload["course"]["cta"]["paid_url"]
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0}) or {}
@@ -198,6 +204,10 @@ async def _persist(
         "last_published_at": _now() if status == "published" else None,
         "last_publish_error": error,
         "last_publish_status_code": status_code,
+        "last_publish_response_preview": response_preview,
+        "last_publish_hint": hint,
+        "last_publish_at": _now(),
+        "last_publish_webhook_url": url,
         "published_to_url": paid_url,
         "updated_at": _now(),
     }
@@ -222,7 +232,9 @@ async def _persist(
             "status": status,
             "error": error,
             "status_code": status_code,
-            "url": payload["course"]["cta"]["paid_url"],
+            "hint": hint,
+            "response_preview": response_preview,
+            "url": url or paid_url,
             "at": _now(),
         }
     )
@@ -298,3 +310,102 @@ async def retry_pending(db) -> dict:
         else:
             fail += 1
     return {"attempted": len(docs), "ok": ok, "failed": fail, "ran_at": _now()}
+
+
+
+async def reconcile_with_learnforge(db) -> dict:
+    """Two-way sync probe between Radar and LearnForge.
+
+    1. Probes the LearnForge endpoint (GET) so we know if the receiver is
+       even deployed.
+    2. Pulls the locally-known publish state for every signal with a
+       generated syllabus.
+    3. Computes drift — what should be live on LearnForge but is in a
+       `failed`/`pending` state on the Radar side.
+
+    Used by the Sync button to give the Architect a single-glance view of
+    catalog drift between the two systems.
+    """
+    webhook = _webhook_url() or "https://learnforge-core.vercel.app/api/courses"
+    probe: dict = {"url": webhook, "reachable": False, "status_code": None, "error": None, "service": None}
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(webhook, headers={"User-Agent": "LearnForge-OpportunityRadar/1.0"})
+        probe["status_code"] = resp.status_code
+        probe["reachable"] = 200 <= resp.status_code < 300
+        if probe["reachable"]:
+            try:
+                body = resp.json()
+                probe["service"] = body.get("service")
+            except Exception:  # noqa: BLE001
+                probe["service"] = None
+        else:
+            probe["error"] = f"HTTP {resp.status_code}"
+    except httpx.ConnectError as e:
+        probe["error"] = f"ConnectError: {e}"
+    except httpx.TimeoutException as e:
+        probe["error"] = f"Timeout: {e}"
+    except Exception as e:  # noqa: BLE001
+        probe["error"] = f"{type(e).__name__}: {e}"
+
+    docs = await db.signals.find(
+        {"syllabus_generated": True},
+        {
+            "_id": 0,
+            "id": 1,
+            "event_title": 1,
+            "publish_status": 1,
+            "last_publish_status_code": 1,
+            "last_publish_error": 1,
+            "last_publish_hint": 1,
+            "publish_retry_count": 1,
+            "publish_next_retry_at": 1,
+            "last_published_at": 1,
+        },
+    ).to_list(1000)
+
+    published = [d for d in docs if d.get("publish_status") == "published"]
+    failed = [d for d in docs if d.get("publish_status") == "failed"]
+    pending = [
+        d for d in docs if d.get("publish_status") not in {"published", "failed"}
+    ]
+
+    return {
+        "ran_at": _now(),
+        "learnforge_probe": probe,
+        "totals": {
+            "syllabus_generated": len(docs),
+            "published": len(published),
+            "failed": len(failed),
+            "pending": len(pending),
+        },
+        "drift": {
+            "count": len(failed) + len(pending),
+            "failed_signals": [
+                {
+                    "id": d["id"],
+                    "title": d.get("event_title"),
+                    "status_code": d.get("last_publish_status_code"),
+                    "error": d.get("last_publish_error"),
+                    "hint": d.get("last_publish_hint"),
+                    "retry_count": d.get("publish_retry_count", 0),
+                    "next_retry_at": d.get("publish_next_retry_at"),
+                }
+                for d in failed[:25]
+            ],
+            "pending_signals": [
+                {"id": d["id"], "title": d.get("event_title")} for d in pending[:25]
+            ],
+        },
+    }
+
+
+async def get_publish_history(db, signal_id: str, limit: int = 10) -> list[dict]:
+    """Last N publish attempts for a signal, newest first."""
+    cursor = (
+        db.publish_log.find({"signal_id": signal_id}, {"_id": 0})
+        .sort("at", -1)
+        .limit(limit)
+    )
+    return await cursor.to_list(limit)

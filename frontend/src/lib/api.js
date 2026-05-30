@@ -54,6 +54,14 @@ export const PublishAPI = {
         client
             .post(`/signals/retry-pending-publishes`, null, { timeout: 60000 })
             .then((r) => r.data),
+    history: (id, limit = 10) =>
+        client
+            .get(`/signals/${id}/publish-history`, { params: { limit } })
+            .then((r) => r.data),
+    reconcile: () =>
+        client
+            .get(`/learnforge/reconcile`, { timeout: 20000 })
+            .then((r) => r.data),
 };
 
 export const AlertsAPI = {

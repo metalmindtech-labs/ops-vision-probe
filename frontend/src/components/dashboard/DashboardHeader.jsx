@@ -8,6 +8,7 @@ import { WebhookSpecButton } from "@/components/dashboard/WebhookSpecDialog";
 export default function DashboardHeader({
     onAdd,
     onRefresh,
+    onSync,
     onRunScraper,
     onPasteHtml,
     onRepublishAll,
@@ -15,6 +16,7 @@ export default function DashboardHeader({
     refreshIntegrations,
     scraperBusy,
     republishBusy,
+    drift,
 }) {
     return (
         <header className="relative">
@@ -89,12 +91,27 @@ export default function DashboardHeader({
                     </Button>
                     <Button
                         data-testid={DASHBOARD.refreshBtn}
-                        onClick={onRefresh}
+                        onClick={onSync || onRefresh}
                         variant="outline"
-                        className="rounded-sm border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 font-mono text-[10px] sm:text-xs uppercase tracking-wider px-2 sm:px-3"
+                        className="relative rounded-sm border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 font-mono text-[10px] sm:text-xs uppercase tracking-wider px-2 sm:px-3"
                     >
                         <RefreshCw className="h-3.5 w-3.5 sm:mr-2" />
                         <span className="hidden sm:inline">Sync</span>
+                        {drift && drift.count > 0 && (
+                            <span
+                                data-testid={DASHBOARD.syncDriftBadge}
+                                title={`${drift.count} courses out of sync · LearnForge HTTP ${drift.statusCode ?? "—"}`}
+                                className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[16px] px-1 rounded-sm border border-red-400/40 bg-red-500/10 text-red-300 font-mono text-[9px] font-bold"
+                            >
+                                {drift.count}
+                            </span>
+                        )}
+                        {drift && drift.count === 0 && drift.reachable && (
+                            <span
+                                className="ml-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400"
+                                title="In sync · LearnForge live"
+                            />
+                        )}
                     </Button>
                     <Button
                         data-testid={DASHBOARD.addSignalBtn}

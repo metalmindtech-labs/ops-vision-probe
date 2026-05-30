@@ -74,4 +74,7 @@ export const DASHBOARD = {
     ctaCopyFreeBtn: "cta-copy-free-btn",
     ctaCopyPaidBtn: "cta-copy-paid-btn",
     syllabusList: "syllabus-modules-list",
+    publishErrorBtn: (id) => `publish-error-btn-${id}`,
+    publishErrorDialog: "publish-error-dialog",
+    syncDriftBadge: "sync-drift-badge",
 };

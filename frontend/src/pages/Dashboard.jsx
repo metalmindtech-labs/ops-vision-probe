@@ -13,6 +13,7 @@ import ScraperStatusBar from "@/components/dashboard/ScraperStatusBar";
 import PasteHtmlDialog from "@/components/dashboard/PasteHtmlDialog";
 import StrikeAlertsBanner from "@/components/dashboard/StrikeAlertsBanner";
 import SignalVelocityChart from "@/components/dashboard/SignalVelocityChart";
+import PublishErrorDialog from "@/components/dashboard/PublishErrorDialog";
 
 export default function Dashboard() {
     const [signals, setSignals] = useState([]);
@@ -27,6 +28,8 @@ export default function Dashboard() {
     const [pasteOpen, setPasteOpen] = useState(false);
     const [scraperBusy, setScraperBusy] = useState(false);
     const [republishBusy, setRepublishBusy] = useState(false);
+    const [errorDialogId, setErrorDialogId] = useState(null);
+    const [drift, setDrift] = useState(null); // { count, learnforge_probe: {reachable, status_code} }
 
     const refreshIntegrations = async () => {
         try {
@@ -39,24 +42,65 @@ export default function Dashboard() {
 
     const refresh = async () => {
         try {
-            const [list, st, scStatus, al, ints] = await Promise.all([
+            const [list, st, scStatus, al, ints, rec] = await Promise.all([
                 SignalsAPI.list(),
                 SignalsAPI.stats(),
                 ScraperAPI.status().catch(() => null),
                 AlertsAPI.list(true).catch(() => []),
                 IntegrationsAPI.status().catch(() => null),
+                PublishAPI.reconcile().catch(() => null),
             ]);
             setSignals(list);
             setStats(st);
             setScraperStatus(scStatus);
             setAlerts(al);
             setIntegrations(ints);
+            if (rec) {
+                setDrift({
+                    count: rec.drift?.count ?? 0,
+                    reachable: rec.learnforge_probe?.reachable ?? false,
+                    statusCode: rec.learnforge_probe?.status_code,
+                });
+            }
         } catch (e) {
             toast.error("Failed to load signals", {
                 description: e?.message ?? "Network error",
             });
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSync = async () => {
+        const t = toast.loading("Reconciling with LearnForge…");
+        try {
+            const rec = await PublishAPI.reconcile();
+            await refresh();
+            const probe = rec.learnforge_probe;
+            const driftCount = rec.drift?.count ?? 0;
+            if (probe.reachable && driftCount === 0) {
+                toast.success("In sync · LearnForge live", {
+                    id: t,
+                    description: `${rec.totals.published} courses published · 0 drift`,
+                });
+            } else if (!probe.reachable) {
+                toast.error(`LearnForge HTTP ${probe.status_code ?? "—"}`, {
+                    id: t,
+                    description:
+                        probe.error ||
+                        "Receiver not deployed. Use Webhook Spec to ship the route.",
+                });
+            } else {
+                toast.warning(`${driftCount} courses drifted`, {
+                    id: t,
+                    description: `${rec.totals.failed} failed · ${rec.totals.pending} pending`,
+                });
+            }
+        } catch (e) {
+            toast.error("Sync failed", {
+                id: t,
+                description: e?.message,
+            });
         }
     };
 
@@ -238,6 +282,7 @@ export default function Dashboard() {
                     <DashboardHeader
                         onAdd={handleCreate}
                         onRefresh={refresh}
+                        onSync={handleSync}
                         onRunScraper={handleRunScraper}
                         onPasteHtml={() => setPasteOpen(true)}
                         onRepublishAll={handleRepublishAll}
@@ -245,6 +290,7 @@ export default function Dashboard() {
                         refreshIntegrations={refreshIntegrations}
                         scraperBusy={scraperBusy}
                         republishBusy={republishBusy}
+                        drift={drift}
                     />
 
                     <ScraperStatusBar status={scraperStatus} />
@@ -270,6 +316,7 @@ export default function Dashboard() {
                                 onConvert={handleConvert}
                                 onEdit={handleEdit}
                                 onDelete={handleDelete}
+                                onInspectFailure={setErrorDialogId}
                             />
                         </div>
                         <div className="lg:col-span-1 space-y-6">
@@ -301,6 +348,12 @@ export default function Dashboard() {
                 onOpenChange={setPasteOpen}
                 onSubmitHtml={handlePasteHtml}
                 onSubmitUrl={handlePasteUrl}
+            />
+
+            <PublishErrorDialog
+                open={!!errorDialogId}
+                onOpenChange={(v) => !v && setErrorDialogId(null)}
+                signalId={errorDialogId}
             />
         </div>
     );
