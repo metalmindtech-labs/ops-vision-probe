@@ -220,6 +220,15 @@ async def publish_signal(db, signal_id: str) -> dict:
                         "`CREATE POLICY \"webhook_insert\" ON courses FOR INSERT "
                         "TO service_role WITH CHECK (true);`"
                     )
+                elif "supabasekey is required" in body_lower or "supabase url is required" in body_lower or "supabaseurl is required" in body_lower:
+                    result["hint"] = (
+                        "LearnForge's Supabase client is missing credentials. "
+                        "On Vercel, set `SUPABASE_URL` and "
+                        "`SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_ANON_KEY`) "
+                        "in the learnforge-core project env, then redeploy. "
+                        "The route handler is wired but createClient() is "
+                        "throwing before any DB request runs."
+                    )
                 elif "duplicate key" in body_lower or "already exists" in body_lower:
                     result["hint"] = (
                         "Receiver tried to INSERT instead of UPSERT. Use "

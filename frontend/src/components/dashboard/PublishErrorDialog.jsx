@@ -283,6 +283,15 @@ function classifyFailure(s) {
         };
     if (code >= 500) {
         const body = (s.last_publish_response_preview || "").toLowerCase();
+        if (body.includes("supabasekey is required") || body.includes("supabaseurl is required") || body.includes("supabase url is required")) {
+            return {
+                kind: "supabase-missing-env",
+                title: `${code} · Supabase env vars missing`,
+                detail:
+                    "LearnForge's route handler is deployed but createClient() is throwing because SUPABASE_URL and/or SUPABASE_SERVICE_ROLE_KEY aren't set on Vercel. Tell them to add both env vars to the learnforge-core project and redeploy.",
+                color: "red",
+            };
+        }
         if (body.includes("row-level security") || body.includes("row level security")) {
             return {
                 kind: "supabase-rls",

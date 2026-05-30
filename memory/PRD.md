@@ -19,6 +19,13 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v14: Supabase Env Diagnostic + Verified 16f960f Compatibility)
+- **Verified the Radar payload IS aligned** with LearnForge's `16f960f` route handler — `modules` (not `syllabus`), `title`, `slug` all present as top-level strings; modules array contains 6 items with the expected keys (`index`, `title`, `summary`, `learning_objectives`, `artifact`, `duration_min`).
+- **LearnForge endpoint is reachable** (GET → 405 POST-only "learnforge-course-publish") — receiver code is deployed and accepting our signed requests.
+- **Captured the exact post-`16f960f` upstream error**: `HTTP 500 · {"error":"supabaseKey is required."}` — the route handler is wired but `createClient()` is throwing because `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` aren't set in the learnforge-core Vercel project's env. This is on LearnForge's deployment config, not our payload.
+- **New failure-mode pattern** in both `publisher.py` and `PublishErrorDialog.jsx`: matches `supabasekey is required` / `supabaseurl is required` and emits remediation: "Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to Vercel env, then redeploy."
+- **Re-published all 4 failed signals** with `republish_all_live` so every signal now carries the precise diagnostic in `last_publish_hint`. UI badge + dialog show "500 · Supabase env vars missing" with the exact env-var fix.
+
 ## Implemented (2026-05-30 — v13: Payload Schema Remap + RLS Diagnostic)
 - **`syllabus.modules` → top-level `modules`** in the webhook payload, plus top-level `title`, `slug`, `category`, `summary`, `price_usd`, `registration_count`, `priority_score`, `source_url`, `paid_url`, `free_url`. The rich nested `course` object is preserved for full-fidelity downstream consumers (also now contains `course.modules` alias for backwards-compat).
 - **Signature header switched to BARE lowercase hex** (no `sha256=` prefix) as the primary `X-Radar-Signature` value — what LearnForge's Next.js receiver expects. Also send `X-Radar-Signature-Hex`, `X-Radar-Signature-Sha256` (with `sha256=` prefix), and `X-Radar-Signature-Algorithm: hmac-sha256` for tolerance.
