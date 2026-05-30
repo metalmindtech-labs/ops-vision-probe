@@ -19,6 +19,21 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v18: Hero Image Fix + Catalog Backfill + Slam Pricing Live)
+- **Diagnosed the broken hero**: the "MBA Essay & Interview Accelerator" signal (id `1e8a43c8-…`) was created before the v15 Fal integration, so `hero_image_url` was never populated. Compounded by a Pydantic model omission — `Signal` model didn't declare `hero_image_url` / `visuals_model` / `visuals_style` / `visuals_errors`, so even when present in MongoDB they were stripped on serialization through `/api/signals/{id}`. Both fixed.
+- **Live Slam Offer applied**: Updated the signal to `price=$49, original=$1000` → `discount_pct=95` flowing through the webhook → LearnForge returned `HTTP 200 "Course upserted"`. The Showroom now has the data to render 95% OFF.
+- **Catalog-wide backfill endpoint** `POST /api/signals/visuals/backfill-missing` — finds every signal with `syllabus_generated=true` and no hero_image_url, regenerates Fal Flux.1 Pro hero + 6 module images, persists to MongoDB. Safe to re-run (skips already-complete signals). After running: `attempted=0, ok=0` (catalog already complete, all 4 syllabus-generated signals have heroes).
+- **All 4 signals republished**: `attempted=4, ok=4, failed=0` — fresh hero URLs are now live on LearnForge for the entire catalog.
+- **NEW drop-in `CourseHero.tsx`** (145 lines) at `/app/docs/learnforge_course_hero.tsx` for the LearnForge team:
+  - Cinematic Sovereign-style placeholder (charcoal background, lime grid, corner crosshair registration marks, title-derived monogram) when src is missing/null
+  - `onError` handler flips back to the placeholder — never renders a broken-image icon
+  - `onLoad` triggers a 500ms opacity fade-in
+  - Lazy-loading + intrinsic `aspect-[16/9]` for zero CLS
+  - `priority` prop for the LCP hero on the showroom page
+- **NEW `/api/integrations/course-hero-patch` endpoint** + **frontend `HeroPatchButton`** in the dashboard header (amber, between `LIBRARY GATE FIX` and `REPUBLISH ALL`). Dialog has: backfill-now button (Radar-side, runs Fal immediately), fixes list, copy/download for the drop-in CourseHero component.
+- Three handoff patches now live in the header: **`WEBHOOK SPEC`** (lime, receiver code), **`LIBRARY GATE FIX`** (red, access control), **`HERO FALLBACK`** (amber, broken-image safety net). All follow the same one-click copy/paste pattern.
+- Tested: 8/8 content checks pass on CourseHero patch (CourseHero export, SovereignPlaceholder fn, onError/onLoad handlers, monogram derivation, crosshair marks, aspect-ratio map, lazy loading). Live API: hero_image_url + visuals_model now returned from `/api/signals/{id}`; backfill returns `attempted=0` after one run (idempotent); publish returns 200 with `discount_pct=95`.
+
 ## Implemented (2026-05-30 — v17: Library Access Gating Patch for LearnForge)
 - **Important framing**: The `app/[locale]/library/page.tsx` lives on **LearnForge's** Vercel app, not the Radar. The Radar can't patch a remote codebase directly — but the same pattern as the Webhook Spec works: drop-in TypeScript file the Architect can paste in one click.
 - **`/app/docs/learnforge_library_page.tsx`** — 260-line drop-in Next.js page server component covering:

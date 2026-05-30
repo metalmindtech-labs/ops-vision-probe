@@ -128,6 +128,10 @@ class Signal(SignalBase):
     published_to_url: Optional[str] = None
     publish_retry_count: Optional[int] = 0
     publish_next_retry_at: Optional[str] = None
+    hero_image_url: Optional[str] = None
+    visuals_model: Optional[str] = None
+    visuals_style: Optional[str] = None
+    visuals_errors: Optional[List[str]] = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 
@@ -317,6 +321,70 @@ async def regenerate_visuals(signal_id: str):
         "errors": visuals.get("errors") or [],
         "model": visuals.get("model"),
     }
+
+
+@api_router.post("/signals/visuals/backfill-missing")
+async def backfill_missing_visuals(limit: int = 20):
+    """Catalog-wide backfill: generate Fal visuals for every signal that
+    has a syllabus but no hero_image_url. Safe to call repeatedly — skips
+    anything that already has visuals.
+    """
+    docs = await db.signals.find(
+        {
+            "syllabus_generated": True,
+            "$or": [
+                {"hero_image_url": {"$exists": False}},
+                {"hero_image_url": None},
+                {"hero_image_url": ""},
+            ],
+        },
+        {"_id": 0},
+    ).to_list(limit)
+
+    results = []
+    for s in docs:
+        try:
+            visuals = await generate_course_visuals(s, skip_existing=False)
+        except Exception as e:  # noqa: BLE001
+            logger.exception("backfill failed for %s: %s", s.get("id"), e)
+            results.append({"id": s.get("id"), "ok": False, "error": str(e)})
+            continue
+        modules = list(s.get("syllabus_modules") or [])
+        by_idx = {m["index"]: m for m in visuals.get("modules") or []}
+        for m in modules:
+            url = (by_idx.get(m.get("index")) or {}).get("url")
+            if url:
+                m["image_url"] = url
+        await db.signals.update_one(
+            {"id": s["id"]},
+            {
+                "$set": {
+                    "syllabus_modules": modules,
+                    "hero_image_url": visuals.get("hero"),
+                    "visuals_model": visuals.get("model"),
+                    "visuals_style": visuals.get("style"),
+                    "visuals_errors": visuals.get("errors") or None,
+                    "updated_at": now_iso(),
+                }
+            },
+        )
+        results.append(
+            {
+                "id": s["id"],
+                "title": s.get("event_title"),
+                "ok": bool(visuals.get("hero")),
+                "hero_image_url": visuals.get("hero"),
+                "module_count": sum(1 for x in modules if x.get("image_url")),
+                "errors": visuals.get("errors") or [],
+            }
+        )
+    return {
+        "attempted": len(docs),
+        "ok": sum(1 for r in results if r.get("ok")),
+        "failed": sum(1 for r in results if not r.get("ok")),
+        "results": results,
+    }
+
 
 
 # -------- Scraper / Ingestion --------
@@ -541,6 +609,44 @@ async def integrations_handoff_doc():
             "Cache-Control": "no-cache",
         },
     )
+
+
+@api_router.get("/integrations/course-hero-patch")
+async def integrations_course_hero_patch():
+    """Drop-in CourseHero React component for the LearnForge showroom.
+
+    Solves the "broken image" problem: when a hero/module image URL is
+    missing or fails to load, this component renders a Sovereign-style
+    cinematic placeholder instead of a broken <img> icon.
+    """
+    from pathlib import Path
+
+    p = (
+        Path(__file__).resolve().parent.parent
+        / "docs"
+        / "learnforge_course_hero.tsx"
+    )
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Hero patch not bundled")
+    code = p.read_text(encoding="utf-8")
+    return {
+        "language": "typescript",
+        "framework": "react-nextjs",
+        "filename": "components/CourseHero.tsx",
+        "fixes": [
+            "Renders a cinematic Sovereign-style placeholder when src is null/missing",
+            "Onload fade-in transition (no FOIT/CLS, dimensioned by aspect-ratio)",
+            "Onerror flips back to the placeholder — never shows a broken-image icon",
+            "Lazy-loading + intrinsic 16:9 ratio prevents layout shift",
+            "Engineering-grid + corner registration marks match Radar aesthetic",
+        ],
+        "deps": ["react"],
+        "version": "v1",
+        "code": code,
+        "lines": code.count("\n") + 1,
+        "bytes": len(code.encode("utf-8")),
+    }
+
 
 
 @api_router.get("/integrations/library-page-patch")

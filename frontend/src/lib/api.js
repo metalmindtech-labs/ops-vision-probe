@@ -90,6 +90,12 @@ export const IntegrationsAPI = {
         client.get(`/integrations/webhook-receiver-spec`).then((r) => r.data),
     libraryPatch: () =>
         client.get(`/integrations/library-page-patch`).then((r) => r.data),
+    heroPatch: () =>
+        client.get(`/integrations/course-hero-patch`).then((r) => r.data),
+    backfillMissingVisuals: () =>
+        client
+            .post(`/signals/visuals/backfill-missing`, null, { timeout: 180000 })
+            .then((r) => r.data),
 };
 
 export const VelocityAPI = {
