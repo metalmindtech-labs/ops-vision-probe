@@ -27,7 +27,13 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 - Generated syllabus list rendered inside the sheet after generation.
 - Tested 100% (backend pytest + frontend Playwright E2E).
 
-## Implemented (2026-02-29 — v2: Scrape → Signal → Syllabus pipeline)
+## Implemented (2026-02-29 — v3: Publish webhook + strike alerts + Vercel /en/ URL fix)
+- **Publish webhook** (`services/publisher.py`): packages signal+syllabus+CTA+demand into a stable `course.publish` payload and POSTs to `LEARNFORGE_WEBHOOK_URL` (default `https://learnforge-core.vercel.app/api/courses`). Persists `publish_status`, `last_published_at`, `last_publish_error`, `last_publish_status_code`, `published_to_url` on the signal. Promotes signal status to `live` on 2xx.
+- **Diff-aware strike alerts** (`services/alerts.py`): when a scrape update bumps reg count by ≥`STRIKE_THRESHOLD_PCT` (default 20%), an alert is recorded in `signal_alerts`. UI tiers it: STRIKE (≥20%), SURGE (≥50%), BREAKOUT (≥100%). One-click dismiss + dismiss-all.
+- **Vercel-correct URLs**: paid offers → `/en/courses/<slug>`, free lead magnets → `/en/scrolls/<slug>` (matched against the live deployment's routing). Centralized in `lib/learnforge.js` and `services/publisher.py`.
+- **New routes**: `POST /api/signals/{id}/publish`, `GET /api/signals/{id}/publish/preview`, `GET /api/alerts`, `POST /api/alerts/{id}/ack`, `POST /api/alerts/ack-all`.
+- Frontend: Strike Alerts banner (tiered), Publish-to-LearnForge section in conversion sheet with status badge + result panel, PUB green badge on signal rows once published.
+- Tested 100% (27/27 backend pytest + 7/7 frontend E2E).
 - **Live Leland scraper** (`services/scraper.py`): httpx + BeautifulSoup + regex extracts event title, registration count, when, coach, rating from joinleland.com/events SSR HTML.
 - **APScheduler** (12-hour IntervalTrigger) on FastAPI startup. New routes: `POST /api/scraper/run`, `POST /api/scraper/ingest-html` (paste-fallback), `GET /api/scraper/status`, `GET /api/scraper/runs`.
 - **Claude Sonnet 4.5** (`claude-sonnet-4-5-20250929`) via `emergentintegrations`:
