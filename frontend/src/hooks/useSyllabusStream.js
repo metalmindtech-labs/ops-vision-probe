@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { syllabusStreamUrl } from "@/lib/api";
 
 /**
@@ -22,6 +22,16 @@ export default function useSyllabusStream() {
         setModules([]);
         setError(null);
         setStreaming(false);
+    }, []);
+
+    // Defensive cleanup on unmount — closes any open EventSource.
+    useEffect(() => {
+        return () => {
+            if (sourceRef.current) {
+                sourceRef.current.close();
+                sourceRef.current = null;
+            }
+        };
     }, []);
 
     const start = useCallback(

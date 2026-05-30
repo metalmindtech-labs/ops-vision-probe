@@ -27,7 +27,12 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 - Generated syllabus list rendered inside the sheet after generation.
 - Tested 100% (backend pytest + frontend Playwright E2E).
 
-## Implemented (2026-02-29 — v3: Publish webhook + strike alerts + Vercel /en/ URL fix)
+## Implemented (2026-02-29 — v4: v2 backlog close-out)
+- **Republish All** (`POST /api/signals/publish-all-live`): hot-reload the entire LearnForge catalog by re-firing the webhook for every signal with `syllabus_generated=true`. Header button in the dashboard.
+- **WhatsApp push for ≥90 priority strikes** (`services/whatsapp.py`): env-gated Twilio integration. When `TWILIO_ACCOUNT_SID/_AUTH_TOKEN/_WHATSAPP_TO` set, fires a formatted message on whale strikes (default threshold `WHATSAPP_STRIKE_THRESHOLD=90`). Skipped state visible in the new Integrations dialog (header badge). Test-ping endpoint at `POST /api/integrations/whatsapp/test`.
+- **Auto-retry on publish failure** (`services/publisher.retry_pending`): APScheduler periodic job every 5 minutes picks up `publish_status=failed` signals whose backoff window has elapsed (exponential 2/4/8/16/32 minutes, max 5 attempts). Tracked via `publish_retry_count` and `publish_next_retry_at` on the signal. Manual trigger at `POST /api/signals/retry-pending-publishes`.
+- **SSE streaming syllabus** (`GET /api/signals/{id}/syllabus/stream`): Server-Sent Events emitting `start` → 6× `module` → `done`. Frontend hook `useSyllabusStream` consumes via EventSource and renders modules progressively in the SyllabusList. *Note: k8s ingress currently buffers text/event-stream so events land in a single chunk near completion — UI still handles it cleanly with the "Streaming N/6…" indicator.*
+- Tested 100% (5/5 iter-4 endpoints + frontend re-test confirms streaming/Republish/Integrations flows all green).
 - **Publish webhook** (`services/publisher.py`): packages signal+syllabus+CTA+demand into a stable `course.publish` payload and POSTs to `LEARNFORGE_WEBHOOK_URL` (default `https://learnforge-core.vercel.app/api/courses`). Persists `publish_status`, `last_published_at`, `last_publish_error`, `last_publish_status_code`, `published_to_url` on the signal. Promotes signal status to `live` on 2xx.
 - **Diff-aware strike alerts** (`services/alerts.py`): when a scrape update bumps reg count by ≥`STRIKE_THRESHOLD_PCT` (default 20%), an alert is recorded in `signal_alerts`. UI tiers it: STRIKE (≥20%), SURGE (≥50%), BREAKOUT (≥100%). One-click dismiss + dismiss-all.
 - **Vercel-correct URLs**: paid offers → `/en/courses/<slug>`, free lead magnets → `/en/scrolls/<slug>` (matched against the live deployment's routing). Centralized in `lib/learnforge.js` and `services/publisher.py`.
