@@ -178,12 +178,25 @@ export default function IntegrationsBadge({ status, onRefresh }) {
                             </div>
                             <div className="font-mono text-[11px] text-zinc-400 space-y-1 break-all">
                                 <div>URL: {wh?.url || "—"}</div>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 flex-wrap">
                                     <KeyRound className="h-3 w-3" />
                                     Signing secret:{" "}
-                                    <span className={wh?.has_secret ? "text-lime-400" : "text-zinc-500"}>
-                                        {wh?.has_secret ? "enabled" : "disabled"}
+                                    <span
+                                        data-testid="webhook-signing-status"
+                                        className={`font-bold ${
+                                            wh?.has_secret
+                                                ? "text-lime-400"
+                                                : "text-zinc-500"
+                                        }`}
+                                    >
+                                        {wh?.has_secret ? "ENABLED" : "DISABLED"}
                                     </span>
+                                    {wh?.has_secret && (
+                                        <span className="text-zinc-600">
+                                            · {wh.signature_algorithm || "hmac-sha256"} →{" "}
+                                            {wh.signature_header || "X-Radar-Signature"}
+                                        </span>
+                                    )}
                                 </div>
                             </div>
                             <Button

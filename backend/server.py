@@ -435,7 +435,11 @@ async def integrations_status():
         },
         "publish_webhook": {
             "url": os.environ.get("LEARNFORGE_WEBHOOK_URL") or None,
-            "has_secret": bool((os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()),
+            "has_secret": bool(
+                (os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()
+            ),
+            "signature_algorithm": "hmac-sha256",
+            "signature_header": "X-Radar-Signature",
         },
     }
 

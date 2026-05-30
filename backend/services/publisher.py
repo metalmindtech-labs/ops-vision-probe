@@ -7,6 +7,9 @@ UI can show the live state at a glance.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -19,6 +22,22 @@ logger = logging.getLogger(__name__)
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _webhook_secret() -> Optional[str]:
+    s = (os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()
+    return s or None
+
+
+def sign_payload(secret: str, body_bytes: bytes) -> str:
+    """HMAC-SHA256 of the raw JSON body using the shared secret.
+
+    Returned as lowercase hex (64 chars). The LearnForge receiver computes
+    the same HMAC over `await req.text()` and compares with
+    `crypto.timingSafeEqual`.
+    """
+    mac = hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256)
+    return mac.hexdigest()
 
 
 def _public_base() -> str:
@@ -101,7 +120,7 @@ async def publish_signal(db, signal_id: str) -> dict:
 
     payload = build_payload(signal)
     url = _webhook_url()
-    secret = os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or ""
+    secret = _webhook_secret() or ""
 
     result: dict = {
         "ok": False,
@@ -122,12 +141,18 @@ async def publish_signal(db, signal_id: str) -> dict:
         "User-Agent": "LearnForge-OpportunityRadar/1.0",
         "X-Radar-Event": "course.publish",
     }
+    # Canonical body bytes — both POST body and HMAC must be byte-identical
+    # for the receiver's signature verification to succeed.
+    body_bytes = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
+        "utf-8"
+    )
     if secret:
-        headers["X-Radar-Signature"] = secret
+        headers["X-Radar-Signature"] = f"sha256={sign_payload(secret, body_bytes)}"
+        headers["X-Radar-Signature-Algorithm"] = "hmac-sha256"
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
+            resp = await client.post(url, content=body_bytes, headers=headers)
         result["status_code"] = resp.status_code
         result["response_preview"] = (resp.text or "")[:400]
         result["ok"] = 200 <= resp.status_code < 300

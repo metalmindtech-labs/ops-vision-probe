@@ -63,14 +63,30 @@ const CoursePublish = z.object({
 type CoursePublishPayload = z.infer<typeof CoursePublish>;
 
 // ---------------------------------------------------------------------------
-// 2) Signature verification — constant-time compare against shared secret.
+// 2) Signature verification — HMAC-SHA256 of the raw request body using the
+//    shared secret. Header format: `sha256=<64-char hex>`.
+//    Constant-time compare via crypto.timingSafeEqual.
 // ---------------------------------------------------------------------------
-function verifySignature(req: NextRequest): boolean {
-    const expected = process.env.LEARNFORGE_WEBHOOK_SECRET;
-    if (!expected) return true; // signing disabled — accept all
-    const got = req.headers.get("x-radar-signature") ?? "";
-    if (got.length !== expected.length) return false;
-    return crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected));
+function verifySignature(rawBody: string, header: string | null): boolean {
+    const secret = process.env.LEARNFORGE_WEBHOOK_SECRET;
+    if (!secret) return true; // signing disabled — accept all
+    if (!header) return false;
+
+    const provided = header.startsWith("sha256=") ? header.slice(7) : header;
+    const expected = crypto
+        .createHmac("sha256", secret)
+        .update(rawBody)
+        .digest("hex");
+
+    if (provided.length !== expected.length) return false;
+    try {
+        return crypto.timingSafeEqual(
+            Buffer.from(provided, "hex"),
+            Buffer.from(expected, "hex"),
+        );
+    } catch {
+        return false;
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -157,7 +173,11 @@ async function upsertCourse(payload: CoursePublishPayload) {
 // 4) Route handler.
 // ---------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
-    if (!verifySignature(req)) {
+    // Read raw body first — HMAC must be computed over the byte-identical
+    // payload the Radar signed. Don't call req.json() before this.
+    const rawBody = await req.text();
+
+    if (!verifySignature(rawBody, req.headers.get("x-radar-signature"))) {
         return NextResponse.json(
             { ok: false, error: "bad signature" },
             { status: 401 },
@@ -166,7 +186,7 @@ export async function POST(req: NextRequest) {
 
     let body: unknown;
     try {
-        body = await req.json();
+        body = JSON.parse(rawBody);
     } catch {
         return NextResponse.json(
             { ok: false, error: "invalid json" },

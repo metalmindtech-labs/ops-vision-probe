@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 12 — HMAC-SHA256 signing of publish webhook. All 8 backend pytest tests pass (status endpoint metadata, sign_payload stdlib equivalence, full end-to-end signature verification via local 127.0.0.1 echo server using fixture signal e3171073-0ae9-4bf8-ae9b-3bb2e303a576, and live upstream 401 'Invalid signature' assertion). Frontend Playwright pass: Integrations dialog shows webhook-signing-status='ENABLED' in lime-400, dialog shows 'hmac-sha256 → X-Radar-Signature', sync-drift-badge renders '4' in red border/bg, and SYNC click produces toast '4 courses drifted · 3 failed · 1 pending' with no crash.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Integrations dialog → LearnForge Team Handoff callout", "issues": ["Copy is stale: still says 'is still returning 404 ... publishes flip from 404 → 200'. Live upstream has moved to HTTP 401 (Invalid signature). Update the callout text to reflect the new 401/signature-mismatch state so the Architect's handoff message stays accurate."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter12_hmac_signing.py",
+    "/app/test_reports/pytest/iter12.xml"
+  ],
+  "action_items": [
+    "Optional copy fix: update IntegrationsBadge LearnForge handoff callout text — it still references '404 → 200' even though upstream now returns 401. Reword to '401 (Invalid signature)' or 'secret mismatch' so the handoff doc the Architect copies is current.",
+    "Optional: drift-badge title currently shows 'LearnForge HTTP 405' (GET probe) while POST publish returns 401. Both are valid but the difference may confuse — consider surfacing both probe results in the tooltip."
+  ],
+  "critical_code_review_comments": [
+    "publisher.sign_payload uses canonical body (json.dumps with sort_keys=True, separators=(',', ':')) and the SAME byte string is POSTed via httpx `content=body_bytes`, guaranteeing the receiver's HMAC over raw body will match. Verified end-to-end against a local echo server — hmac.compare_digest(received, expected) == True. Implementation is correct.",
+    "X-Radar-Signature header format 'sha256=<64-hex>' matches the receiver TS code in /app/docs/learnforge_receiver_route.ts. Algorithm + header names are also exposed via GET /api/integrations/status for the UI badge.",
+    "Live publish hits real LearnForge endpoint and returns HTTP 401 + body '{\"error\":\"Invalid signature\"}'. This is the expected upstream state (route reachable, secret mismatch on LearnForge side). Persistence layer correctly records publish_status='failed', last_publish_status_code=401, and increments retry counter with exponential backoff."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter12_hmac_signing.py"],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100%"},
+  "test_credentials": "none — no auth on this app",
+  "seed_data_creation": "none — reused existing fixture signal id e3171073-0ae9-4bf8-ae9b-3bb2e303a576 (already has syllabus_generated=true). The end-to-end test temporarily flips that signal's publish_status to 'published' via the local echo server; if next iteration needs it in 'failed' state, re-run POST /api/signals/<id>/publish against the live LearnForge endpoint to restore the 401-failed state.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iter12 verified HMAC-SHA256 signing implementation. Test file at /app/backend/tests/test_iter12_hmac_signing.py covers: (1) /api/integrations/status exposes signature_algorithm + signature_header + has_secret; (2) sign_payload stdlib hmac equivalence; (3) end-to-end signature verification via local echo HTTPServer (monkeypatches LEARNFORGE_WEBHOOK_URL to 127.0.0.1:<free_port>); (4) live publish still returns 401 + 'Invalid signature' from real LearnForge endpoint — expected upstream state. Note: end-to-end test mutates fixture signal publish_status to 'published'; subsequent live-publish test reverts it back to failed via real POST. Frontend selectors used: [data-testid=integrations-badge], [data-testid=integrations-dialog], [data-testid=webhook-signing-status], [data-testid=sync-drift-badge], [data-testid=refresh-btn]. SYNC click confirmed non-crashing with toast showing drift state. Installed pytest-asyncio==1.4.0 to /root/.venv (was missing).",
+  "rca_of_the_issue": "N/A — no bug, this is feature verification. The two intermediate test failures during script development were both in the dev-only sanity check that tried to byte-compare the received body against a freshly rebuilt build_payload() — `published_at` is generated at publish-time so a rebuild at a different second naturally differs; replaced with a 'parse + recanonicalise + byte-compare' invariant which correctly proves canonical JSON form (compact separators + sort_keys=True) without depending on timestamp."
+}
