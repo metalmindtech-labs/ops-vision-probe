@@ -350,22 +350,22 @@ export default function SignalVelocityChart() {
                                             s.signal_id
                                         )}
                                         onClick={() => toggle(s.signal_id)}
-                                        className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] transition-opacity ${
+                                        className={`inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.15em] transition-opacity max-w-full min-w-0 ${
                                             hidden ? "opacity-30" : ""
                                         }`}
                                     >
                                         <span
-                                            className="inline-block w-3 h-0.5"
+                                            className="inline-block w-3 h-0.5 shrink-0"
                                             style={{ background: color }}
                                         />
-                                        <span className="text-zinc-300 max-w-[18rem] truncate">
+                                        <span className="text-zinc-300 max-w-[10rem] sm:max-w-[18rem] truncate min-w-0">
                                             {s.title}
                                         </span>
-                                        <span className="text-zinc-500">
+                                        <span className="text-zinc-500 shrink-0">
                                             {fmtNumber(s.current)}
                                         </span>
                                         <span
-                                            className={`px-1 py-0.5 rounded-sm border ${
+                                            className={`px-1 py-0.5 rounded-sm border shrink-0 ${
                                                 s.priority_score >= 90
                                                     ? "text-lime-400 border-lime-400/40"
                                                     : "text-zinc-500 border-zinc-700"
@@ -375,7 +375,7 @@ export default function SignalVelocityChart() {
                                         </span>
                                         {s.strikes && s.strikes.length > 0 && (
                                             <span
-                                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm border border-red-400/40 text-red-300"
+                                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm border border-red-400/40 text-red-300 shrink-0"
                                                 title={`${s.strikes.length} strike(s) in window`}
                                             >
                                                 ◎ {s.strikes.length}
