@@ -164,7 +164,17 @@ async def signals_velocity(hours: int = 24, limit: int = 6, ids: Optional[str] =
 
 @api_router.get("/signals/stats")
 async def signal_stats():
-    docs = await db.signals.find({}, {"_id": 0}).to_list(2000)
+    docs = await db.signals.find(
+        {},
+        {
+            "_id": 0,
+            "priority_score": 1,
+            "registration_count": 1,
+            "status": 1,
+            "category": 1,
+            "syllabus_generated": 1,
+        },
+    ).to_list(2000)
     total = len(docs)
     high_priority = sum(1 for d in docs if (d.get("priority_score") or 0) >= 80)
     total_reg = sum((d.get("registration_count") or 0) for d in docs)

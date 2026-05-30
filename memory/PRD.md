@@ -19,6 +19,13 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v6: Strike Rings + Mobile + PWA)
+- **Fixed Signal Velocity Chart strike rings**: ReferenceDots were silently dropped because `XAxis` is `type="number"` (epoch ms) but the dot `x` and `xDomain` were ISO strings. Converted both to epoch ms (`new Date(t).getTime()`) so the 6 strike-attribution rings (red breakout, amber surge, lime strike) now render reliably on the velocity line. Verified at runtime: 6 rings present, matching test ids `velocity-strike-*`.
+- **Mobile responsiveness**: header buttons now use short labels under sm-breakpoint, dashboard horizontal padding shrunk, table wrapped in `min-w-[760px]` + overflow-x scroll, velocity chart range buttons enlarged for touch, legend buttons truncate (`min-w-0 max-w-[10rem] sm:max-w-[18rem]`) to eliminate the 390-px overflow. Mobile 390×844 and tablet 768×1024 now have zero horizontal scroll. Bottom `pb-24` added so the floating install banner never overlaps content.
+- **PWA install**: `/public/manifest.json` (name=LearnForge Opportunity Radar, theme `#0a0a0a`, 192/512/apple/favicon icons generated from a custom lime-radar mark), `/public/sw.js` service worker (network-only for `/api`, stale-while-revalidate for shell), registered only in production via `index.js`. iOS-aware install hook (`usePWAInstall`) drives header `Install` button + mobile soft-prompt banner (dismiss persisted in localStorage) — both gated on `beforeinstallprompt` or iOS UA.
+- **Perf nit fixed**: `/api/signals/stats` now projects only the 5 fields it aggregates (was fetching full docs ×2000).
+- Tested 100% (iteration_9: mobile/tablet overflow PASS, strike rings PASS, all PWA assets HTTP 200).
+
 ## Implemented (2026-02-29 — v1)
 - Backend endpoints: `GET/POST /api/signals`, `GET/PUT/DELETE /api/signals/{id}`, `GET /api/signals/stats`, `POST /api/signals/{id}/syllabus`, `POST /api/signals/seed`. Auto-seed on startup.
 - Dashboard with header, 4 stat tiles, category distribution sidebar, public-launch CTA strip.
