@@ -88,6 +88,8 @@ export const IntegrationsAPI = {
             .then((r) => r.data),
     receiverSpec: () =>
         client.get(`/integrations/webhook-receiver-spec`).then((r) => r.data),
+    libraryPatch: () =>
+        client.get(`/integrations/library-page-patch`).then((r) => r.data),
 };
 
 export const VelocityAPI = {

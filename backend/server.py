@@ -543,6 +543,43 @@ async def integrations_handoff_doc():
     )
 
 
+@api_router.get("/integrations/library-page-patch")
+async def integrations_library_page_patch():
+    """Drop-in Next.js Library page patch for the LearnForge team.
+
+    Returns the canonical `app/[locale]/library/page.tsx` that gates access
+    to Radar Curriculums based on the user's purchase history, with an
+    admin bypass and an empty-state CTA. Source-of-truth lives at
+    /app/docs/learnforge_library_page.tsx.
+    """
+    from pathlib import Path
+
+    p = (
+        Path(__file__).resolve().parent.parent
+        / "docs"
+        / "learnforge_library_page.tsx"
+    )
+    if not p.exists():
+        raise HTTPException(status_code=404, detail="Library patch not bundled")
+    code = p.read_text(encoding="utf-8")
+    return {
+        "language": "typescript",
+        "framework": "nextjs-app-router",
+        "filename": "app/[locale]/library/page.tsx",
+        "fixes": [
+            "Gate Radar Curriculums behind purchase check (user_purchases table)",
+            "Admin bypass via LEARNFORGE_ADMIN_EMAILS env var",
+            "Empty-state CTA → /showroom for users without purchases",
+            "Uses pre-computed discount_pct from the Radar payload (no recompute)",
+        ],
+        "deps": ["@supabase/ssr"],
+        "version": "v1",
+        "code": code,
+        "lines": code.count("\n") + 1,
+        "bytes": len(code.encode("utf-8")),
+    }
+
+
 @api_router.get("/integrations/webhook-receiver-spec")
 async def integrations_webhook_receiver_spec():
     """Drop-in Next.js App Router receiver code for the LearnForge team.

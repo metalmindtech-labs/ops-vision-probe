@@ -4,6 +4,7 @@ import { DASHBOARD } from "@/constants/testIds/dashboard";
 import IntegrationsBadge from "@/components/dashboard/IntegrationsBadge";
 import { InstallButton } from "@/components/PWAInstall";
 import { WebhookSpecButton } from "@/components/dashboard/WebhookSpecDialog";
+import { LibraryPatchButton } from "@/components/dashboard/LibraryPatchDialog";
 
 export default function DashboardHeader({
     onAdd,
@@ -54,6 +55,7 @@ export default function DashboardHeader({
                         onRefresh={refreshIntegrations}
                     />
                     <WebhookSpecButton />
+                    <LibraryPatchButton />
                     <InstallButton />
                     <Button
                         data-testid={DASHBOARD.republishAllBtn}

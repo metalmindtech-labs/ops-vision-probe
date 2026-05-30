@@ -19,6 +19,22 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v17: Library Access Gating Patch for LearnForge)
+- **Important framing**: The `app/[locale]/library/page.tsx` lives on **LearnForge's** Vercel app, not the Radar. The Radar can't patch a remote codebase directly — but the same pattern as the Webhook Spec works: drop-in TypeScript file the Architect can paste in one click.
+- **`/app/docs/learnforge_library_page.tsx`** — 260-line drop-in Next.js page server component covering:
+  - Cookie-aware Supabase server client (`@supabase/ssr`)
+  - `auth.getUser()` → redirect to `/signup?next=/library` if unauthenticated
+  - Admin bypass via `LEARNFORGE_ADMIN_EMAILS` env var (sees full catalog with an "Architect · sees all" badge)
+  - For students: `.from("user_purchases").select("course_id").eq("user_id", user.id).eq("status", "active")` → `.in("id", courseIds)` on `courses`
+  - "Radar Curriculum" pill on any row where `source === "radar"`
+  - Reads the pre-computed `discount_pct` from the payload (no recompute)
+  - Empty-state CTA → `Explore Premium Outcomes` linking to `/showroom`
+  - Bundled SQL block for the `user_purchases` table + RLS policy so non-admins only see their own rows
+- **Backend `GET /api/integrations/library-page-patch`** returns the structured JSON (filename, fixes, deps, lines, bytes, code) — same pattern as the Webhook Spec endpoint.
+- **Frontend `LibraryPatchButton` + `LibraryPatchDialog`** — red-themed `LIBRARY GATE FIX` button in the header (between Webhook Spec and Republish All). Dialog renders an emerald "What this patch fixes" panel + the full code in a scrollable `<pre>` with `Copy Patch` and `Download` actions.
+- **Webhook payload upgraded**: every Radar publish now sets top-level `source: "radar"` so LearnForge can render the "Radar Curriculum" pill and segment the catalog by origin.
+- Tested: 8/8 content checks pass on the served patch (createServerClient, auth.getUser, user_purchases filter, admin bypass, empty CTA, signup redirect, discount_pct read, RLS SQL block). UI button renders and dialog opens with copy button visible.
+
 ## Implemented (2026-05-30 — v16: Slam Offer Discount Math)
 - **Canonical discount formula** lives in two mirrored places kept in lockstep:
   - Backend: `services/publisher.compute_discount_pct(current, original)`

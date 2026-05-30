@@ -125,6 +125,7 @@ def build_payload(signal: dict) -> dict:
         "event": "course.publish",
         "signal_id": signal.get("id"),
         "published_at": _now(),
+        "source": "radar",
         "title": title,
         "slug": paid_slug,
         "modules": modules,
