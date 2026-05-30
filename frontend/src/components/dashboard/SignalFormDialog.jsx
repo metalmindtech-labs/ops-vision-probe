@@ -169,7 +169,7 @@ export default function SignalFormDialog({
                             data-testid={DASHBOARD.formSourceUrl}
                             value={data.source_url}
                             onChange={(e) => set("source_url", e.target.value)}
-                            placeholder="https://leland.com/events/..."
+                            placeholder="https://www.joinleland.com/events/..."
                             className="bg-zinc-900 border-zinc-800 focus:border-lime-400 focus-visible:ring-1 focus-visible:ring-lime-400 rounded-sm font-mono text-xs"
                         />
                     </div>

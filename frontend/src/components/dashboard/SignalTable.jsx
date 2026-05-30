@@ -226,7 +226,7 @@ export default function SignalTable({
                     last sync now
                 </span>
                 <a
-                    href="https://leland.com/events"
+                    href="https://www.joinleland.com/events"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 hover:text-lime-400 inline-flex items-center gap-1 transition-colors"

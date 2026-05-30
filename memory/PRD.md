@@ -19,6 +19,14 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v10: Scraper 404 Fix + URL Fallback)
+- **Root-caused the "404 on the frontend"**: The actual `/api/scraper/run` was always returning HTTP 200 (23 events). The 404 came from stale calls to `/api/leland/scrape` (legacy endpoint name) and stale `leland.com` (vs `joinleland.com`) external links.
+- **Added legacy alias** `POST /api/leland/scrape` → forwards to the same `run_scrape` pipeline (no more silent 404 for any older docs/scripts).
+- **Added Paste-URL fallback** `POST /api/scraper/ingest-url`: server-side fetches a `joinleland.com` URL with our pre-configured UA, runs the same parser. Whitelisted host validation (400 for non-leland URLs and empty input). Bypasses browser-side anti-bot challenges.
+- **Frontend `PasteHtmlDialog` is now tabbed** — `Paste URL` (default) and `Paste HTML`, with input pre-filled with `https://www.joinleland.com/events`, validation, and toast surfacing of upstream 502 detail if Leland anti-bot kicks in.
+- **Stale URL fixes**: `SignalTable.jsx` external `leland.com/events` link → `www.joinleland.com/events`; `SignalFormDialog.jsx` placeholder also updated. Backend `services/scraper.LELAND_EVENTS_URL` already correctly pointed at `https://www.joinleland.com/events`.
+- Tested: `/api/scraper/run` 200 (23 events), `/api/leland/scrape` 200 (no longer 404), `/api/scraper/ingest-url` with valid joinleland URL 200 (23 events), bad-host 400, empty 400. UI smoke: both tabs mount with correct testids.
+
 ## Implemented (2026-05-30 — v9: Webhook Spec Viewer / Bridge for Antigravity Inject)
 - **Receiver code source-of-truth**: `/app/docs/learnforge_receiver_route.ts` — 222 lines of drop-in Next.js App Router code (Zod validation, `crypto.timingSafeEqual` signature verification, idempotent upsert stub with full Prisma example, GET health-check, `runtime="nodejs"`, `dynamic="force-dynamic"`). Single file the Architect can paste into Vercel / GCP Antigravity.
 - **Backend `/api/integrations/webhook-receiver-spec`**: returns structured JSON `{ filename, endpoint_url, framework, runtime, signature_header, shared_secret_required_env, shared_secret_configured, deps, lines, bytes, code }` so the UI can render meta-cards + the code block from one fetch.

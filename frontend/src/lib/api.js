@@ -30,6 +30,10 @@ export const ScraperAPI = {
         client
             .post("/scraper/ingest-html", { html }, { timeout: 180000 })
             .then((r) => r.data),
+    ingestUrl: (url) =>
+        client
+            .post("/scraper/ingest-url", { url }, { timeout: 180000 })
+            .then((r) => r.data),
     status: () => client.get("/scraper/status").then((r) => r.data),
     runs: (limit = 10) =>
         client.get(`/scraper/runs?limit=${limit}`).then((r) => r.data),

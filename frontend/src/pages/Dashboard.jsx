@@ -169,6 +169,22 @@ export default function Dashboard() {
         }
     };
 
+    const handlePasteUrl = async (url) => {
+        const t = toast.loading("Fetching Leland URL…");
+        try {
+            const result = await ScraperAPI.ingestUrl(url);
+            toast.success("URL ingested", {
+                id: t,
+                description: `${result.discovered} events · ${result.created} new · ${result.updated} updated`,
+            });
+            await refresh();
+        } catch (e) {
+            const detail = e?.response?.data?.detail || e?.message || "fetch failed";
+            toast.error("URL ingest failed", { id: t, description: detail });
+            throw e;
+        }
+    };
+
     const handleAckAlert = async (id) => {
         try {
             await AlertsAPI.ack(id);
@@ -283,7 +299,8 @@ export default function Dashboard() {
             <PasteHtmlDialog
                 open={pasteOpen}
                 onOpenChange={setPasteOpen}
-                onSubmit={handlePasteHtml}
+                onSubmitHtml={handlePasteHtml}
+                onSubmitUrl={handlePasteUrl}
             />
         </div>
     );

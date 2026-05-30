@@ -265,6 +265,13 @@ async def scraper_run():
     return await run_scrape(db, trigger="manual")
 
 
+# Legacy alias — some older Architect tooling/docs hit `/api/leland/scrape`.
+# Forwarding here so we never silently 404 on the bridge.
+@api_router.post("/leland/scrape")
+async def leland_scrape_legacy():
+    return await run_scrape(db, trigger="manual-legacy-alias")
+
+
 @api_router.post("/scraper/ingest-html")
 async def scraper_ingest_html(payload: dict = Body(...)):
     """Fallback ingestion: paste raw HTML (or stripped text) from Leland."""
@@ -272,6 +279,39 @@ async def scraper_ingest_html(payload: dict = Body(...)):
     if not html or len(html) < 50:
         raise HTTPException(status_code=400, detail="html payload too small")
     return await ingest_html(db, html, trigger="manual-paste")
+
+
+@api_router.post("/scraper/ingest-url")
+async def scraper_ingest_url(payload: dict = Body(...)):
+    """Fallback ingestion: paste a joinleland.com URL.
+
+    Server-side fetches the HTML (so the user-side anti-bot challenge is
+    bypassed by our pre-configured UA + IP) and runs the same parser as
+    the live scraper. Accepts the main events listing or any individual
+    event page.
+    """
+    url = ((payload or {}).get("url") or "").strip()
+    if not url or not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(status_code=400, detail="invalid url")
+    if "joinleland.com" not in url.lower() and "leland.com" not in url.lower():
+        raise HTTPException(
+            status_code=400,
+            detail="only joinleland.com / leland.com urls are accepted",
+        )
+    try:
+        from services.scraper import fetch_listing_html
+
+        html = await fetch_listing_html(url)
+    except Exception as e:  # noqa: BLE001
+        logger.exception("scraper_ingest_url fetch failed: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Upstream fetch failed: {type(e).__name__}: {e}. Use Paste HTML "
+                "fallback if anti-bot challenge is in effect."
+            ),
+        )
+    return await ingest_html(db, html, trigger="manual-paste-url")
 
 
 @api_router.get("/scraper/status")
