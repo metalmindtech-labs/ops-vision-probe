@@ -58,7 +58,34 @@ async def enrich_signal(
     system = (
         "You are a course-strategy analyst for LearnForge. You convert raw "
         "Leland event signals into structured course-conversion metadata. "
-        "Reply with a single JSON object, no prose."
+        "Reply with a single JSON object, no prose.\n\n"
+        "HEADLINE LAW — THE SPECIFICITY LADDER (HORMOZI PROTOCOL):\n"
+        "Generic titles are forbidden. Every paid_offer_title MUST follow this "
+        "anatomy:\n"
+        "  [TIME-BOUND or NUMERIC LEVER] · [HYPER-SPECIFIC PERSONA / SCHOOL / "
+        "COMPANY / VENUE] · [PROPRIETARY MECHANISM NAME]: "
+        "[SPECIFIC ACTION VERB] [QUANTIFIED OUTCOME].\n"
+        "Mantra: 'You want to be the person who solves THIS problem for THIS "
+        "person.' Never just a category, always a named persona.\n\n"
+        "Canonical specimens to emulate (style, NOT content):\n"
+        "  - 'The 48-Hour Wharton Essay Forge: Automate Your Narrative Core "
+        "and Recover 20+ Hours of Writing.'\n"
+        "  - 'The Tech PM Switcher: Master the Google/Meta Product Sense Loop "
+        "and Land your $200k Offer within 90 Days.'\n"
+        "  - 'The Med Spa Audit-Proof System: Recover $30k/mo in Lost Revenue "
+        "through Sovereign Clinical Documentation.'\n\n"
+        "Rules:\n"
+        "  • Always name the SPECIFIC target (Wharton, Google/Meta, "
+        "Big-4 Audit, MBB, Stanford GSB, etc.) — never the generic category.\n"
+        "  • Always include a NUMBER (hours saved, $ outcome, days to result, "
+        "% lift, # of reps).\n"
+        "  • Always coin a PROPRIETARY mechanism (Forge / Switcher / "
+        "Audit-Proof System / Sovereign Loop / Stack / Engine / Protocol).\n"
+        "  • Drop ForgeCore: as the leading prefix.\n"
+        "  • Title length: 8–18 words. No generic words like 'mastery', "
+        "'fundamentals', 'introduction', 'guide'.\n"
+        "  • Lead_magnet titles follow the same protocol but free / quick-win "
+        "framed (a tangible asset, not a webinar)."
     )
     user = (
         "Classify this Leland free-event signal and produce conversion metadata.\n\n"
@@ -82,8 +109,10 @@ async def enrich_signal(
         '  "category": "...",\n'
         '  "priority_score": <int>,\n'
         '  "notes": "<one-sentence demand signal>",\n'
-        '  "suggested_lead_magnet_title": "<short, outcome-oriented free asset title>",\n'
-        '  "suggested_paid_offer_title": "ForgeCore: <short product name>"\n'
+        '  "suggested_lead_magnet_title": "<Hormozi-spec free asset name, persona+number+mechanism>",\n'
+        '  "suggested_paid_offer_title": "ForgeCore: <Hormozi-spec headline per the law above>",\n'
+        '  "cta_headline": "<Hormozi-spec 6-10 word punch headline for the public CTA>",\n'
+        '  "cta_subtext": "<one sentence — quantified outcome, no fluff>"\n'
         "}\n"
     )
     chat = LlmChat(
@@ -127,7 +156,19 @@ async def generate_syllabus_ai(signal: dict) -> list[dict]:
         "You are LearnForge's lead curriculum architect. You design tight, "
         "high-fidelity mini-courses (ForgeCore) for ambitious professionals. "
         "Every module ships a tangible artifact, not just lecture content. "
-        "Reply with a single JSON object, no prose."
+        "Reply with a single JSON object, no prose.\n\n"
+        "MODULE TITLE LAW — SPECIFICITY LADDER (HORMOZI PROTOCOL):\n"
+        "Each module.title must read like a chapter in a flagship Hormozi "
+        "playbook — proprietary mechanism + named persona + quantified "
+        "outcome. Banned words: 'foundations', 'introduction', 'mastery', "
+        "'fundamentals', 'overview', 'frameworks 101'. Required pattern:\n"
+        "  '[ACTION VERB] the [PROPRIETARY NOUN]: [SPECIFIC RESULT]'\n"
+        "Specimens (style, not content):\n"
+        "  • 'Engineer the Narrative Core: 3 Wharton Essay Archetypes Decoded'\n"
+        "  • 'Run the Google Product-Sense Loop: 8 Live Case Reps'\n"
+        "  • 'Build the Audit-Proof Note: A 90-Second Documentation Template'\n"
+        "Module artifacts must be tangible deliverables (template, checklist, "
+        "filled worksheet, recorded rep, scorecard) — never 'reflection'."
     )
     user = (
         f"Design a 6-module ForgeCore syllabus for the course titled \"{title}\".\n\n"

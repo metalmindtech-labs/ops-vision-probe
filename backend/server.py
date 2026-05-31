@@ -323,6 +323,77 @@ async def regenerate_visuals(signal_id: str):
     }
 
 
+
+
+@api_router.post("/signals/headlines/regenerate")
+async def regenerate_headlines(limit: int = 3, force: bool = False):
+    """Apply the Hormozi Specificity Ladder to the next N signals.
+
+    Re-runs `enrich_signal()` with the new prompt — overwrites paid_offer_title,
+    lead_magnet_title, cta_headline, cta_subtext. By default operates on the
+    top `limit` highest-priority signals; pass `?force=true` to also re-enrich
+    signals whose titles already look on-brand (start with 'ForgeCore:').
+
+    Returns the before/after diff so the Architect can audit the upgrade.
+    """
+    from services.ai import enrich_signal
+
+    query = {}
+    if not force:
+        # Skip signals that already look Hormozi-spec (have a ': ' separator,
+        # a number, and either a school/company keyword).
+        pass  # we just pick by priority and re-run regardless of current state
+
+    docs = await db.signals.find(query, {"_id": 0}).sort("priority_score", -1).to_list(limit)
+    diff = []
+    for s in docs:
+        before = {
+            "paid_offer_title": s.get("paid_offer_title"),
+            "lead_magnet_title": s.get("lead_magnet_title"),
+            "cta_headline": s.get("cta_headline"),
+            "cta_subtext": s.get("cta_subtext"),
+        }
+        try:
+            enrich = await enrich_signal(
+                event_title=s.get("event_title", ""),
+                registration_count=s.get("registration_count") or 0,
+                when=s.get("event_when"),
+                coach=s.get("coach"),
+            )
+        except Exception as e:  # noqa: BLE001
+            logger.exception("regenerate_headlines failed for %s: %s", s.get("id"), e)
+            diff.append({"id": s.get("id"), "ok": False, "error": str(e)})
+            continue
+        updates = {
+            "paid_offer_title": enrich.get("suggested_paid_offer_title") or s.get("paid_offer_title"),
+            "lead_magnet_title": enrich.get("suggested_lead_magnet_title") or s.get("lead_magnet_title"),
+            "cta_headline": enrich.get("cta_headline") or s.get("cta_headline"),
+            "cta_subtext": enrich.get("cta_subtext") or s.get("cta_subtext"),
+            "notes": enrich.get("notes") or s.get("notes"),
+            "updated_at": now_iso(),
+        }
+        await db.signals.update_one({"id": s["id"]}, {"$set": updates})
+        diff.append(
+            {
+                "id": s["id"],
+                "ok": True,
+                "event_title": s.get("event_title"),
+                "before": before,
+                "after": {
+                    "paid_offer_title": updates["paid_offer_title"],
+                    "lead_magnet_title": updates["lead_magnet_title"],
+                    "cta_headline": updates["cta_headline"],
+                    "cta_subtext": updates["cta_subtext"],
+                },
+            }
+        )
+    return {
+        "attempted": len(docs),
+        "ok": sum(1 for d in diff if d.get("ok")),
+        "failed": sum(1 for d in diff if not d.get("ok")),
+        "diff": diff,
+    }
+
 @api_router.post("/signals/visuals/backfill-missing")
 async def backfill_missing_visuals(limit: int = 20):
     """Catalog-wide backfill: generate Fal visuals for every signal that

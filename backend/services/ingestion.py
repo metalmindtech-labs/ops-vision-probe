@@ -119,8 +119,8 @@ async def ingest_events(
                 "paid_offer_slug": _slugify(
                     enrich.get("suggested_paid_offer_title") or ev.event_title
                 ),
-                "cta_headline": "",
-                "cta_subtext": "",
+                "cta_headline": enrich.get("cta_headline") or "",
+                "cta_subtext": enrich.get("cta_subtext") or "",
                 "status": "tracked",
                 "syllabus_generated": False,
                 "syllabus_modules": [],

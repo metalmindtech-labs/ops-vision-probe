@@ -19,6 +19,27 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Implemented (2026-05-30 — v19: Hormozi Specificity Ladder for All Headlines)
+- **Patched `services/ai.py` system prompts** for both `enrich_signal` (course-level naming) and `generate_syllabus_ai` (module-level naming) with the **Hormozi Specificity Ladder Protocol**:
+  - Required anatomy: `[TIME-BOUND or NUMERIC LEVER] · [HYPER-SPECIFIC PERSONA / SCHOOL / COMPANY] · [PROPRIETARY MECHANISM NAME]: [SPECIFIC ACTION VERB] [QUANTIFIED OUTCOME]`.
+  - Mantra baked into the system prompt: *"You want to be the person who solves THIS problem for THIS person."*
+  - Three architect-supplied canonical specimens included as style anchors.
+  - Banned words list: `foundations`, `mastery`, `fundamentals`, `introduction`, `overview`, `frameworks 101`.
+  - Required elements per output: school/company name, a number (hours / $ / days / %), a proprietary mechanism noun (Forge / Engine / Switcher / Stack / Audit-Proof System).
+- **Enrich output expanded** — now also returns `cta_headline` (6-10 word punch) and `cta_subtext` (quantified outcome sentence). Ingestion writes these on initial signal create (no longer empty strings).
+- **NEW `/api/signals/headlines/regenerate?limit=N`** endpoint — re-runs the upgraded enrich on the top-N priority signals, persists `paid_offer_title`, `lead_magnet_title`, `cta_headline`, `cta_subtext`, returns a full before/after diff for audit.
+- **Live execution** on the top 3 signals — all 3 produced perfect Hormozi-spec headlines on the first pass:
+
+| # | Signal | After |
+|---|---|---|
+| 1 | MBB Case | **ForgeCore: The 21-Day MBB Case Engine: Master the Bain/McKinsey/BCG Framework Stack and Land Your $165k Offer** |
+| 2 | MBA App Week | **ForgeCore: The 12-Week M7 Story Engine: Turn 3 Career Pivots into a Cohesive Narrative and Secure 2+ Round-1 Interview Invites** |
+| 3 | Stanford GSB | **ForgeCore: The 72-Hour Stanford GSB Essay Engine: Engineer Your 'What Matters Most' Core and Ship a T10-Caliber App in 21 Days** |
+
+- **Visuals regenerated** for all 3 (Fal Flux.1 Pro, hero + 6 modules each, 0 errors) so the cinematic imagery matches the new headlines.
+- **All 4 published to LearnForge**: `attempted=4, ok=4, failed=0` — upgraded headlines now live on the Showroom.
+- **Module-level Hormozi protocol** is wired in the syllabus prompt — applies automatically to any *new* syllabus generation; existing module titles preserved (don't overwrite the Architect's accepted work).
+
 ## Implemented (2026-05-30 — v18: Hero Image Fix + Catalog Backfill + Slam Pricing Live)
 - **Diagnosed the broken hero**: the "MBA Essay & Interview Accelerator" signal (id `1e8a43c8-…`) was created before the v15 Fal integration, so `hero_image_url` was never populated. Compounded by a Pydantic model omission — `Signal` model didn't declare `hero_image_url` / `visuals_model` / `visuals_style` / `visuals_errors`, so even when present in MongoDB they were stripped on serialization through `/api/signals/{id}`. Both fixed.
 - **Live Slam Offer applied**: Updated the signal to `price=$49, original=$1000` → `discount_pct=95` flowing through the webhook → LearnForge returned `HTTP 200 "Course upserted"`. The Showroom now has the data to render 95% OFF.
