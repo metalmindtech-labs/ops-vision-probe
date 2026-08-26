@@ -141,7 +141,11 @@ async def enrich_signal(
 
 
 async def generate_syllabus_ai(signal: dict) -> list[dict]:
-    """Generate a structured LearnForge course syllabus with Claude Sonnet 4.5."""
+    """DEPRECATED (v1): course/syllabus generation is LearnForge's job, not
+    Radar's. All call sites are gated behind RADAR_LEGACY_PUBLISH_ENABLED
+    (default OFF). Radar's v2 role ends at dispatching a CourseBriefV2.
+
+    Generate a structured LearnForge course syllabus with Claude Sonnet 4.5."""
     title = (
         signal.get("paid_offer_title")
         or signal.get("event_title")

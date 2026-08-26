@@ -7,6 +7,14 @@ import os
 import re
 import requests
 import pytest
+
+import sys as _sys
+_sys.path.insert(0, "/app/backend")
+from services.publisher import legacy_publish_enabled as _legacy_on  # noqa: E402
+_LEGACY_SKIP = pytest.mark.skipif(
+    not _legacy_on(),
+    reason="v1 publish/syllabus routes deprecated (410) — RADAR_LEGACY_PUBLISH_ENABLED=false; v2 coverage in test_iter13_course_brief_v2.py",
+)
 import subprocess
 from urllib.parse import urlparse, parse_qs
 
@@ -29,6 +37,7 @@ def _assert_signup_url(u: str):
 
 
 # ----- Publish preview -----
+@_LEGACY_SKIP
 class TestPublishPreview:
     def test_preview_cta_urls(self):
         r = requests.get(f"{BASE_URL}/api/signals/{SIGNAL_ID}/publish/preview", timeout=30)
@@ -50,6 +59,7 @@ class TestPublishPreview:
 
 
 # ----- Publish endpoint -----
+@_LEGACY_SKIP
 class TestPublishWebhook:
     def test_publish_returns_404_with_hint_and_clean_ctas(self):
         r = requests.post(f"{BASE_URL}/api/signals/{SIGNAL_ID}/publish", timeout=60)
@@ -70,6 +80,7 @@ class TestPublishWebhook:
 
 
 # ----- SSE stream -----
+@_LEGACY_SKIP
 class TestSyllabusStream:
     def test_stream_emits_start_progress_modules_done(self):
         url = f"{BASE_URL}/api/signals/{SIGNAL_ID}/syllabus/stream"

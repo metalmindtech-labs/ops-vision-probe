@@ -4,6 +4,14 @@ import time
 import requests
 import pytest
 
+import sys as _sys
+_sys.path.insert(0, "/app/backend")
+from services.publisher import legacy_publish_enabled as _legacy_on  # noqa: E402
+_LEGACY_SKIP = pytest.mark.skipif(
+    not _legacy_on(),
+    reason="v1 publish/syllabus routes deprecated (410) — RADAR_LEGACY_PUBLISH_ENABLED=false; v2 coverage in test_iter13_course_brief_v2.py",
+)
+
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
 API = f"{BASE_URL}/api"
 
@@ -29,6 +37,7 @@ def _mbb_signal(session):
 
 
 # ---------- Publish preview ----------
+@_LEGACY_SKIP
 class TestPublishPreview:
     def test_preview_payload_structure(self, session):
         sig = _mbb_signal(session)
@@ -68,6 +77,7 @@ class TestPublishPreview:
 
 
 # ---------- Publish ----------
+@_LEGACY_SKIP
 class TestPublish:
     def test_publish_attempt_records_failure(self, session):
         sig = _mbb_signal(session)

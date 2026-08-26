@@ -1,6 +1,14 @@
 """Iteration 6 tests: Signal Velocity time-series + Publish Payload Spec."""
 import os
 import pytest
+
+import sys as _sys
+_sys.path.insert(0, "/app/backend")
+from services.publisher import legacy_publish_enabled as _legacy_on  # noqa: E402
+_LEGACY_SKIP = pytest.mark.skipif(
+    not _legacy_on(),
+    reason="v1 publish/syllabus routes deprecated (410) — RADAR_LEGACY_PUBLISH_ENABLED=false; v2 coverage in test_iter13_course_brief_v2.py",
+)
 import requests
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
@@ -131,6 +139,7 @@ class TestRegression:
         d = r.json()
         assert "whatsapp" in d and "publish_webhook" in d
 
+    @_LEGACY_SKIP
     def test_publish_preview(self, session):
         s = session.get(f"{API}/signals").json()[0]
         r = session.get(f"{API}/signals/{s['id']}/publish/preview")

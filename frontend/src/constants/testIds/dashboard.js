@@ -83,4 +83,12 @@ export const DASHBOARD = {
     publishErrorBtn: (id) => `publish-error-btn-${id}`,
     publishErrorDialog: "publish-error-dialog",
     syncDriftBadge: "sync-drift-badge",
+    // CourseBriefV2 dispatch (v2)
+    briefPreviewBtn: "brief-preview-btn",
+    briefPreviewJson: "brief-preview-json",
+    dispatchBriefBtn: "dispatch-brief-btn",
+    dispatchResultPanel: "dispatch-result-panel",
+    jobStatusChip: "job-status-chip",
+    jobRefreshBtn: "job-refresh-btn",
+    jobPublicUrl: "job-public-url",
 };

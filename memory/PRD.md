@@ -19,6 +19,33 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 4. Simulated Syllabus Generation — 5-module deterministic output.
 5. CRUD persistence in MongoDB.
 
+## Responsibility Matrix (v2 — ARCHITECTURE CORRECTION, 2026-06)
+**Radar discovers demand; LearnForge generates courses.**
+
+| Concern | Owner |
+|---|---|
+| Demand discovery, source evidence, registrations, category | **Radar** |
+| Priority scoring, audience/problem analysis | **Radar** |
+| Offer / price / CTA **hypotheses** | **Radar** |
+| CourseBriefV2 dispatch + job status tracking | **Radar** |
+| Syllabus, curriculum, module/lesson/quiz generation, review, persistence | **LearnForge** |
+| Learner experience, progress, entitlements | **LearnForge** |
+| Checkout and paid access | **Stripe / LearnForge** |
+
+Sequence: `Leland public demand → Radar discovery/scoring → CourseBriefV2 → LearnForge generation pipeline → completed course → Stripe gate`.
+Radar never claims to have generated a course/syllabus/lesson/module/quiz.
+
+## Implemented (2026-06 — v20: CourseBriefV2 + Legacy Gating — Phase 1)
+- **`services/course_brief.py`**: typed `CourseBriefV2` (schema_version 2.0, signal_id, deterministic sha256 idempotency_key, source, demand_evidence w/ priority_band, audience, commercial_hypothesis w/ `validation_status="hypothesis"` + free_module_count=2, generation_constraints w/ prohibited_claims, callback). `extra="forbid"` on every model + recursive `assert_no_content_fields` rejecting `modules/lessons/quizzes/syllabus/...`. Built purely from already-stored signal metadata — **no AI calls**.
+- **`services/dispatcher.py`**: signed (HMAC-SHA256 over raw canonical body) POST to `LEARNFORGE_COURSE_JOBS_URL`; retries w/ backoff (3 attempts, 1/2/4s) on 5xx/transport only; idempotent (existing non-failed job w/ same key → dedupe, no re-POST); job states `accepted/queued/generating/reviewing/ready/failed` tracked in `course_jobs` collection + mirrored on signal (`course_job_*` fields); honest failures (404 → `failed` + "receiver not deployed" hint); missing URL fails safely with **NO legacy fallback**; never logs secret/full payload. `refresh_job` is status-only and rejects unknown states.
+- **New endpoints**: `GET /api/signals/{id}/brief/preview` (read-only), `POST /api/signals/{id}/dispatch`, `GET /api/signals/{id}/job-status`, `POST /api/course-jobs/{job_id}/refresh`. `/api/integrations/status` now exposes `course_jobs` block + `legacy_publish_enabled`.
+- **Legacy isolation**: `RADAR_LEGACY_PUBLISH_ENABLED` flag (default OFF; OFF in this env). Server-side 410 on `POST/GET /signals/{id}/publish[/preview]`, `publish-all-live`, `retry-pending-publishes`, `POST /signals/{id}/syllabus`, `GET /signals/{id}/syllabus/stream`; scheduled retry job dormant. `generate_syllabus_ai` + `build_payload` marked DEPRECATED (code retained, no deletions, no data changed).
+- **UI rework**: "Stream LearnForge Syllabus" + "Publish to LearnForge" removed. New `BriefDispatchPanel` (05 · Dispatch to LearnForge): Preview Course Brief JSON, Dispatch Brief, job status chip, public-URL link when LearnForge returns one, honest failure panel. Sections 01–03 tagged **HYPOTHESIS**. Syllabus display relabeled "Course Modules · LearnForge (legacy v1 record)". Republish All hidden unless server-confirmed legacy flag; header copy no longer claims Radar ships syllabi.
+- **Docs**: `docs/LEARNFORGE_V2_CONTRACT.md` (proposed contract: headers/signing, idempotency, state machine, request/accepted/status/ready/failed examples, error semantics, remaining LearnForge work). README rewritten with responsibility matrix.
+- **Tests**: `tests/test_iter13_course_brief_v2.py` — 31 passed (validation, forbidden fields, idempotency determinism/stability, HMAC over raw body, dispatch success/404/missing-URL/no-fallback/retry/timeout-exhaustion/malformed-2xx/dedupe/re-dispatch-after-fail, refresh state transitions incl. unknown-state rejection, live 410 gating on all 6 legacy routes, live brief preview has no content fields). LearnForge calls mocked (httpx.MockTransport); dedicated test DB. Legacy-era tests marked skipif on the flag (11 skipped).
+- **Upstream status (honest)**: `POST https://learnforge-core.vercel.app/api/course-generation-jobs` → **HTTP 404**. The v2 receiver is NOT implemented yet — dispatches record `failed` with the exact diagnostic until LearnForge ships it. No fake integration.
+- Pre-existing test failures (NOT from this change): iter11 reconcile tests assert the historic upstream-404 era; scraper/strike/velocity tests suffer accumulated DB-state pollution (documented since v5).
+
 ## Implemented (2026-05-30 — v19: Hormozi Specificity Ladder for All Headlines)
 - **Patched `services/ai.py` system prompts** for both `enrich_signal` (course-level naming) and `generate_syllabus_ai` (module-level naming) with the **Hormozi Specificity Ladder Protocol**:
   - Required anatomy: `[TIME-BOUND or NUMERIC LEVER] · [HYPER-SPECIFIC PERSONA / SCHOOL / COMPANY] · [PROPRIETARY MECHANISM NAME]: [SPECIFIC ACTION VERB] [QUANTIFIED OUTCOME]`.

@@ -64,6 +64,21 @@ export const PublishAPI = {
             .then((r) => r.data),
 };
 
+export const BriefAPI = {
+    preview: (id) =>
+        client.get(`/signals/${id}/brief/preview`).then((r) => r.data),
+    dispatch: (id) =>
+        client
+            .post(`/signals/${id}/dispatch`, null, { timeout: 60000 })
+            .then((r) => r.data),
+    jobStatus: (id) =>
+        client.get(`/signals/${id}/job-status`).then((r) => r.data),
+    refreshJob: (jobId) =>
+        client
+            .post(`/course-jobs/${jobId}/refresh`, null, { timeout: 30000 })
+            .then((r) => r.data),
+};
+
 export const AlertsAPI = {
     list: (onlyUnack = true) =>
         client

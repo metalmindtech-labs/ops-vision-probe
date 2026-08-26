@@ -41,12 +41,12 @@ export default function DashboardHeader({
                         <span className="text-lime-400 blink">_</span>
                     </h1>
                     <p className="mt-3 max-w-2xl text-xs sm:text-sm text-zinc-400">
-                        Convert high-demand Leland event signals into{" "}
+                        Discover high-demand Leland event signals and dispatch{" "}
                         <span className="text-zinc-200 font-medium">
-                            LearnForge
+                            Course Briefs
                         </span>{" "}
-                        course output. Track demand · define lead magnets &amp;
-                        paid offers · ship syllabi · launch CTAs.
+                        to LearnForge. Track demand · analyze audiences · frame
+                        offer hypotheses · LearnForge generates the courses.
                     </p>
                 </div>
 
@@ -59,17 +59,19 @@ export default function DashboardHeader({
                     <LibraryPatchButton />
                     <HeroPatchButton />
                     <InstallButton />
-                    <Button
-                        data-testid={DASHBOARD.republishAllBtn}
-                        onClick={onRepublishAll}
-                        disabled={republishBusy}
-                        variant="outline"
-                        className="rounded-sm border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 font-mono text-[10px] sm:text-xs uppercase tracking-wider disabled:opacity-60 px-2 sm:px-3"
-                    >
-                        <RotateCw className={`h-3.5 w-3.5 sm:mr-2 ${republishBusy ? "animate-spin" : ""}`} />
-                        <span className="hidden sm:inline">{republishBusy ? "Republishing…" : "Republish All"}</span>
-                        <span className="sm:hidden ml-1">{republishBusy ? "…" : "Pub"}</span>
-                    </Button>
+                    {integrationsStatus?.legacy_publish_enabled && (
+                        <Button
+                            data-testid={DASHBOARD.republishAllBtn}
+                            onClick={onRepublishAll}
+                            disabled={republishBusy}
+                            variant="outline"
+                            className="rounded-sm border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-50 font-mono text-[10px] sm:text-xs uppercase tracking-wider disabled:opacity-60 px-2 sm:px-3"
+                        >
+                            <RotateCw className={`h-3.5 w-3.5 sm:mr-2 ${republishBusy ? "animate-spin" : ""}`} />
+                            <span className="hidden sm:inline">{republishBusy ? "Republishing…" : "Republish All (Legacy)"}</span>
+                            <span className="sm:hidden ml-1">{republishBusy ? "…" : "Pub"}</span>
+                        </Button>
+                    )}
                     <Button
                         data-testid={DASHBOARD.pasteHtmlBtn}
                         onClick={onPasteHtml}

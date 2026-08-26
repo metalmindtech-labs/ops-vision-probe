@@ -1,6 +1,14 @@
 """Backend tests for LearnForge Opportunity Radar API."""
 import os
 import pytest
+
+import sys as _sys
+_sys.path.insert(0, "/app/backend")
+from services.publisher import legacy_publish_enabled as _legacy_on  # noqa: E402
+_LEGACY_SKIP = pytest.mark.skipif(
+    not _legacy_on(),
+    reason="v1 publish/syllabus routes deprecated (410) — RADAR_LEGACY_PUBLISH_ENABLED=false; v2 coverage in test_iter13_course_brief_v2.py",
+)
 import requests
 
 BASE_URL = os.environ["REACT_APP_BACKEND_URL"].rstrip("/")
@@ -121,6 +129,7 @@ class TestCRUDFlow:
         assert g["paid_offer_slug"] == "forgecore-ai-eng-sprint"
         assert g["status"] == "converting"
 
+    @_LEGACY_SKIP
     def test_trigger_syllabus(self, session):
         sid = TestCRUDFlow.created_id
         r = session.post(f"{API}/signals/{sid}/syllabus")
@@ -138,6 +147,7 @@ class TestCRUDFlow:
         # Status was already "converting"; should remain converting
         assert d["status"] in ("converting", "live")
 
+    @_LEGACY_SKIP
     def test_syllabus_bumps_tracked_to_converting(self, session):
         # Create a fresh tracked signal and verify status bumps
         r = session.post(f"{API}/signals", json={

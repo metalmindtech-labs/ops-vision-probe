@@ -28,7 +28,10 @@ from services.publisher import (
     reconcile_with_learnforge,
     get_publish_history,
     sign_payload,
+    legacy_publish_enabled,
 )
+from services.course_brief import build_course_brief
+from services.dispatcher import dispatch_brief, refresh_job, get_job_for_signal
 from services.alerts import list_alerts, ack_alert, ack_all
 from services.whatsapp import get_status as whatsapp_status, send_whatsapp
 from services.history import (
@@ -69,6 +72,26 @@ def slugify(value: str) -> str:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _require_legacy_publish():
+    """DEPRECATED v1 path guard. Radar discovers demand; LearnForge generates
+    courses. Legacy syllabus-generation/publish routes stay dormant unless
+    RADAR_LEGACY_PUBLISH_ENABLED=true is set server-side."""
+    if not legacy_publish_enabled():
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "error": "legacy_publish_disabled",
+                "message": (
+                    "The v1 modules webhook and Radar-side syllabus generation "
+                    "are deprecated. Radar dispatches a CourseBriefV2; LearnForge "
+                    "owns all course generation. Set RADAR_LEGACY_PUBLISH_ENABLED=true "
+                    "to temporarily re-enable the legacy path."
+                ),
+                "replacement": "POST /api/signals/{signal_id}/dispatch",
+            },
+        )
 
 
 # -------- Models --------
@@ -251,6 +274,8 @@ async def delete_signal(signal_id: str):
 
 @api_router.post("/signals/{signal_id}/syllabus", response_model=Signal)
 async def trigger_syllabus(signal_id: str):
+    # DEPRECATED: syllabus creation is LearnForge's responsibility (v2).
+    _require_legacy_publish()
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -544,6 +569,8 @@ async def scraper_runs(limit: int = 20):
 
 @api_router.post("/signals/{signal_id}/publish")
 async def publish_signal_route(signal_id: str):
+    # DEPRECATED v1 modules webhook — gated behind RADAR_LEGACY_PUBLISH_ENABLED.
+    _require_legacy_publish()
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -552,10 +579,50 @@ async def publish_signal_route(signal_id: str):
 
 @api_router.get("/signals/{signal_id}/publish/preview")
 async def publish_preview(signal_id: str):
+    # DEPRECATED v1 payload preview — gated behind RADAR_LEGACY_PUBLISH_ENABLED.
+    _require_legacy_publish()
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
     return build_payload(existing)
+
+
+# -------- CourseBriefV2 dispatch (v2: Radar discovers, LearnForge generates) --------
+
+@api_router.get("/signals/{signal_id}/brief/preview")
+async def brief_preview(signal_id: str):
+    """Read-only CourseBriefV2 preview — never dispatches or persists."""
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return build_course_brief(existing).model_dump()
+
+
+@api_router.post("/signals/{signal_id}/dispatch")
+async def dispatch_signal_brief(signal_id: str):
+    """Dispatch the signed CourseBriefV2 to LearnForge's course-jobs endpoint."""
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    return await dispatch_brief(db, signal_id)
+
+
+@api_router.get("/signals/{signal_id}/job-status")
+async def signal_job_status(signal_id: str):
+    existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Signal not found")
+    job = await get_job_for_signal(db, signal_id)
+    return {"signal_id": signal_id, "job": job}
+
+
+@api_router.post("/course-jobs/{job_id}/refresh")
+async def course_job_refresh(job_id: str):
+    """Status-only refresh — queries LearnForge, updates Radar job metadata."""
+    result = await refresh_job(db, job_id)
+    if result.get("error") == "job_not_found":
+        raise HTTPException(status_code=404, detail="Course job not found")
+    return result
 
 
 @api_router.get("/alerts")
@@ -580,11 +647,15 @@ async def alerts_ack_all():
 
 @api_router.post("/signals/publish-all-live")
 async def signals_publish_all_live():
+    # DEPRECATED v1 bulk republish — gated behind RADAR_LEGACY_PUBLISH_ENABLED.
+    _require_legacy_publish()
     return await republish_all_live(db)
 
 
 @api_router.post("/signals/retry-pending-publishes")
 async def signals_retry_pending_publishes():
+    # DEPRECATED v1 retry — gated behind RADAR_LEGACY_PUBLISH_ENABLED.
+    _require_legacy_publish()
     return await retry_pending(db)
 
 
@@ -640,6 +711,16 @@ async def integrations_status():
             "signature_algorithm": "hmac-sha256",
             "signature_header": "X-Radar-Signature",
         },
+        "course_jobs": {
+            "url": os.environ.get("LEARNFORGE_COURSE_JOBS_URL") or None,
+            "schema_version": "2.0",
+            "has_secret": bool(
+                (os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()
+            ),
+            "signature_algorithm": "hmac-sha256",
+            "signature_header": "X-Radar-Signature",
+        },
+        "legacy_publish_enabled": legacy_publish_enabled(),
     }
 
 
@@ -854,7 +935,10 @@ async def stream_syllabus(signal_id: str):
     is in flight we emit `: heartbeat` comments every second so any
     intermediate proxy (k8s ingress / Cloudflare / nginx) does NOT buffer
     the connection and the UI gets visible progress.
+
+    DEPRECATED: syllabus creation is LearnForge's responsibility (v2).
     """
+    _require_legacy_publish()
     existing = await db.signals.find_one({"id": signal_id}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Signal not found")
@@ -1135,6 +1219,8 @@ async def scheduled_scrape_job():
 
 
 async def scheduled_retry_job():
+    if not legacy_publish_enabled():
+        return  # DEPRECATED v1 retry path — dormant unless flag enabled
     try:
         result = await retry_pending(db)
         if result["attempted"]:

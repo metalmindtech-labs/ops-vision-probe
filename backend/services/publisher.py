@@ -29,6 +29,21 @@ def _webhook_secret() -> Optional[str]:
     return s or None
 
 
+def legacy_publish_enabled() -> bool:
+    """Feature flag for the DEPRECATED v1 modules webhook path.
+
+    v1 shipped fully-formed course modules to LearnForge, blurring the
+    ownership boundary. Default OFF: Radar dispatches CourseBriefV2 only
+    (services/dispatcher.py) and LearnForge owns all course generation.
+    """
+    return (os.environ.get("RADAR_LEGACY_PUBLISH_ENABLED") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
 def compute_discount_pct(
     current_price: Optional[float], original_price: Optional[float]
 ) -> Optional[int]:
@@ -102,7 +117,12 @@ def public_free_url(slug: str) -> str:
 
 
 def build_payload(signal: dict) -> dict:
-    """Stable webhook contract for downstream LearnForge consumers.
+    """DEPRECATED (v1): ships fully-formed `modules` to LearnForge, which
+    violates the ownership boundary (LearnForge generates courses, not Radar).
+    Kept for backward compatibility behind RADAR_LEGACY_PUBLISH_ENABLED.
+    Replacement: services.course_brief.build_course_brief (CourseBriefV2).
+
+    Stable webhook contract for downstream LearnForge consumers.
 
     LearnForge's Next.js receiver expects flat top-level `title`, `slug`,
     and `modules` (renamed from the previous nested `syllabus.modules`).

@@ -163,20 +163,6 @@ export default function Dashboard() {
         }
     };
 
-    const handleTriggerSyllabus = async (id) => {
-        try {
-            const updated = await SignalsAPI.triggerSyllabus(id);
-            toast.success("Syllabus generated", {
-                description: `${updated.syllabus_modules.length} modules synthesized by Claude Sonnet 4.5.`,
-            });
-            await refresh();
-        } catch (e) {
-            toast.error("Syllabus generation failed", {
-                description: e?.message,
-            });
-        }
-    };
-
     const handleRunScraper = async () => {
         setScraperBusy(true);
         const t = toast.loading("Scraping Leland event-stream…", {
@@ -339,8 +325,7 @@ export default function Dashboard() {
                 open={!!conversionId}
                 onOpenChange={(v) => !v && setConversionId(null)}
                 onSave={handleConversionSave}
-                onTriggerSyllabus={handleTriggerSyllabus}
-                onPublished={refresh}
+                onDispatched={refresh}
             />
 
             <PasteHtmlDialog

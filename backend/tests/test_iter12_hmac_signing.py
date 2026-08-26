@@ -20,6 +20,14 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
+
+import sys as _sys
+_sys.path.insert(0, "/app/backend")
+from services.publisher import legacy_publish_enabled as _legacy_on  # noqa: E402
+_LEGACY_SKIP = pytest.mark.skipif(
+    not _legacy_on(),
+    reason="v1 publish/syllabus routes deprecated (410) — RADAR_LEGACY_PUBLISH_ENABLED=false; v2 coverage in test_iter13_course_brief_v2.py",
+)
 import requests
 
 # Make /app/backend importable so we can pull in `services.publisher`.
@@ -173,8 +181,8 @@ async def test_publish_signal_signs_body_with_hmac_sha256(monkeypatch, echo_serv
         algo_header = captured["headers"].get("X-Radar-Signature-Algorithm")
         assert sig_header, "missing X-Radar-Signature header"
         assert algo_header == "hmac-sha256"
-        assert sig_header.startswith("sha256="), sig_header
-        hex_part = sig_header.split("=", 1)[1]
+        # Since v13 the primary header is BARE lowercase hex (no sha256= prefix)
+        hex_part = sig_header
         assert len(hex_part) == 64
 
         # Recompute HMAC over the body bytes the server actually received
@@ -182,11 +190,10 @@ async def test_publish_signal_signs_body_with_hmac_sha256(monkeypatch, echo_serv
         expected_hex = hmac.new(
             SECRET.encode("utf-8"), received_body, hashlib.sha256
         ).hexdigest()
-        expected_full = f"sha256={expected_hex}"
 
-        assert hmac.compare_digest(sig_header, expected_full), {
+        assert hmac.compare_digest(sig_header, expected_hex), {
             "received": sig_header,
-            "expected": expected_full,
+            "expected": expected_hex,
         }
 
         # Sanity: body is canonical JSON (compact separators, sorted keys).
@@ -215,6 +222,7 @@ async def test_publish_signal_signs_body_with_hmac_sha256(monkeypatch, echo_serv
 # ---------------------------------------------------------------------------
 # 4. Live publish → expected upstream 401 with 'Invalid signature' body
 # ---------------------------------------------------------------------------
+@_LEGACY_SKIP
 class TestLivePublishExpected401:
     def test_publish_returns_401_invalid_signature(self):
         r = requests.post(

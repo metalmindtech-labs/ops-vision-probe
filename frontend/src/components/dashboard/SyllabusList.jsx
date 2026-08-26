@@ -8,11 +8,11 @@ export default function SyllabusList({ modules, streaming = false, heroImageUrl 
                 <section data-testid={DASHBOARD.syllabusList}>
                     <div className="flex items-center justify-between mb-3">
                         <h3 className="font-mono text-xs uppercase tracking-[0.25em] text-lime-400">
-                            04 · AI-Generated Syllabus
+                            04 · Course Modules · LearnForge
                         </h3>
                         <span className="font-mono text-[10px] text-lime-400 inline-flex items-center gap-1.5">
                             <Activity className="h-3 w-3 animate-pulse" />
-                            streaming · claude sonnet 4.5
+                            receiving…
                         </span>
                     </div>
                     <div className="font-mono text-[11px] text-zinc-500 border border-dashed border-zinc-800 rounded-sm p-6 text-center">
@@ -27,15 +27,15 @@ export default function SyllabusList({ modules, streaming = false, heroImageUrl 
         <section data-testid={DASHBOARD.syllabusList}>
             <div className="flex items-center justify-between mb-3">
                 <h3 className="font-mono text-xs uppercase tracking-[0.25em] text-lime-400">
-                    04 · AI-Generated Syllabus
+                    04 · Course Modules · LearnForge
                 </h3>
                 <span className="font-mono text-[10px] text-zinc-500 inline-flex items-center gap-1.5">
                     {streaming && (
                         <Activity className="h-3 w-3 text-lime-400 animate-pulse" />
                     )}
                     {streaming
-                        ? "streaming…"
-                        : `${modules.length} modules · claude 4.5 · flux pro`}
+                        ? "receiving…"
+                        : `${modules.length} modules · legacy v1 record`}
                 </span>
             </div>
             {heroImageUrl && (
