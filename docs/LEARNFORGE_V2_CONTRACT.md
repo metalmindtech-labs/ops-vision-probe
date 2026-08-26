@@ -172,3 +172,10 @@ violates the ownership boundary, and will be removed once v2 is live.
 4. Return `public_course_url` on `ready`; gate paid access via Stripe.
 5. Set `LEARNFORGE_WEBHOOK_SECRET` in the LearnForge environment (same shared
    secret Radar signs with — value not reproduced here).
+
+
+> **Drop-in starting point:** `docs/learnforge_receiver_stub_kit/` ships a
+> ready-to-paste Next.js receiver stub (route + status endpoint + HMAC verify +
+> Zod schema + Prisma model + `verify_local.sh` smoke test) that covers steps
+> 1, 2 and 5 above. It acknowledges briefs as `accepted` and leaves a single
+> `TODO(generation)` seam for step 3 — it intentionally generates no content.

@@ -8,16 +8,16 @@ export default function LelandCTAStrip() {
             <div className="absolute -right-12 -top-12 w-32 h-32 rounded-full bg-lime-400/10 blur-2xl" />
             <div className="relative p-5">
                 <span className="font-mono text-[10px] uppercase tracking-[0.3em] text-lime-400">
-                    Public Launch
+                    Demand → LearnForge
                 </span>
                 <h3 className="mt-3 font-mono text-lg text-zinc-50 leading-tight">
-                    Push generated courses live on{" "}
+                    Dispatch course briefs to{" "}
                     <span className="text-lime-400">learnforge-core.vercel.app</span>
                 </h3>
                 <p className="mt-2 text-xs text-zinc-400 leading-relaxed">
-                    Every converted signal becomes a live course landing page,
-                    funneling traffic from Leland directly into the LearnForge
-                    catalog.
+                    Every converted signal becomes a signed CourseBriefV2 —
+                    dispatched to LearnForge, which owns generation and
+                    publishing of the live course.
                 </p>
                 <a
                     href={LEARNFORGE_URL}

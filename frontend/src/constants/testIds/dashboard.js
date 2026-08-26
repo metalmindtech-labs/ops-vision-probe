@@ -3,7 +3,7 @@ export const DASHBOARD = {
     headerStatsTotal: "stat-total-signals",
     headerStatsHigh: "stat-high-priority",
     headerStatsReg: "stat-total-registrations",
-    headerStatsSyllabi: "stat-syllabi-generated",
+    headerStatsSyllabi: "stat-briefs-dispatched",
     addSignalBtn: "add-signal-btn",
     refreshBtn: "refresh-btn",
     runScraperBtn: "run-scraper-btn",

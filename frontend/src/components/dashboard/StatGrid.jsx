@@ -1,4 +1,4 @@
-import { Activity, AlertTriangle, Users, FileCode } from "lucide-react";
+import { Activity, AlertTriangle, Users, Send } from "lucide-react";
 import { DASHBOARD } from "@/constants/testIds/dashboard";
 
 function StatCell({ label, value, sub, icon: Icon, accent, testId }) {
@@ -40,7 +40,7 @@ export default function StatGrid({ stats, loading }) {
     const total = stats?.total_signals ?? 0;
     const high = stats?.high_priority ?? 0;
     const reg = stats?.total_registrations ?? 0;
-    const syllabi = stats?.syllabi_generated ?? 0;
+    const dispatched = stats?.briefs_dispatched ?? 0;
 
     return (
         <section className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -67,10 +67,10 @@ export default function StatGrid({ stats, loading }) {
                 testId={DASHBOARD.headerStatsReg}
             />
             <StatCell
-                label="Syllabi Forged"
-                value={loading ? "—" : syllabi.toString().padStart(2, "0")}
-                sub="generated"
-                icon={FileCode}
+                label="Briefs Dispatched"
+                value={loading ? "—" : dispatched.toString().padStart(2, "0")}
+                sub="to learnforge"
+                icon={Send}
                 accent
                 testId={DASHBOARD.headerStatsSyllabi}
             />

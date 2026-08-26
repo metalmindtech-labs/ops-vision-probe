@@ -213,7 +213,8 @@ async def signal_stats():
     total_reg = sum((d.get("registration_count") or 0) for d in docs)
     converting = sum(1 for d in docs if d.get("status") == "converting")
     live = sum(1 for d in docs if d.get("status") == "live")
-    syllabi = sum(1 for d in docs if d.get("syllabus_generated"))
+    legacy_courses = sum(1 for d in docs if d.get("syllabus_generated"))
+    briefs_dispatched = len(await db.course_jobs.distinct("signal_id"))
     categories: dict = {}
     for d in docs:
         cat = d.get("category", "Uncategorized")
@@ -224,7 +225,9 @@ async def signal_stats():
         "total_registrations": total_reg,
         "converting": converting,
         "live": live,
-        "syllabi_generated": syllabi,
+        "briefs_dispatched": briefs_dispatched,
+        "legacy_courses": legacy_courses,
+        "syllabi_generated": legacy_courses,
         "categories": [
             {"name": k, "count": v}
             for k, v in sorted(categories.items(), key=lambda x: -x[1])
