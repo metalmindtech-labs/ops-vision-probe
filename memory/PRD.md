@@ -35,6 +35,11 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 Sequence: `Leland public demand → Radar discovery/scoring → CourseBriefV2 → LearnForge generation pipeline → completed course → Stripe gate`.
 Radar never claims to have generated a course/syllabus/lesson/module/quiz.
 
+## Implemented (2026-06 — v22: Local demo of the Radar→LearnForge handshake)
+- **TEMPORARY / MOCKED**: to make the preview show a real `202 accepted` (instead of the honest upstream 404), a **local in-sandbox demo receiver** was created at `/app/backend/tools/local_learnforge_receiver.py` (uvicorn on `:8099`) and `backend/.env` `LEARNFORGE_COURSE_JOBS_URL` was pointed at `http://localhost:8099/api/course-generation-jobs`. This is NOT real LearnForge, generates NO course content, stores jobs in memory, and does NOT survive a container restart.
+- Verified live via external API: dispatch → `{ok:true, status:"accepted", http_status:202}`; refresh → `accepted`; re-dispatch → `deduplicated:true`; `briefs_dispatched` stat increments.
+- **REVERT BEFORE DEPLOY**: set `LEARNFORGE_COURSE_JOBS_URL` back to `https://learnforge-core.vercel.app/api/course-generation-jobs` and stop the `:8099` process. Real fix = deploy the receiver kit (`docs/learnforge_receiver_stub_kit/`) into learnforge-core.
+
 ## Implemented (2026-06 — v21: Radar-Accurate Terminology + Receiver Stub Kit)
 - **Metric tile corrected**: `StatGrid` "Syllabi Forged / generated" → **"Briefs Dispatched / to learnforge"** (Send icon). Backend `/api/signals/stats` now returns `briefs_dispatched` = `len(distinct signal_id in course_jobs)` (accurate V2 dispatch count; currently **0**), plus `legacy_courses` = 5 (historic `syllabus_generated` records, kept for reference; `syllabi_generated` retained as alias). Test id renamed `stat-syllabi-generated` → `stat-briefs-dispatched`.
 - **Terminology sweep**: `LelandCTAStrip` "Push generated courses live" → "Dispatch course briefs to … LearnForge owns generation/publishing". Header copy already Radar-accurate. Legacy v1 handoff dialogs (HeroPatch/WebhookSpec) left intact — they describe LearnForge-side receiver behavior, not Radar generation.
