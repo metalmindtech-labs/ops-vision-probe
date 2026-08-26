@@ -57,7 +57,16 @@ export const supabaseJobStore: JobStore = {
       .insert(row)
       .select("*")
       .single();
-    if (error) throw new Error(`course_jobs insert failed: ${error.message}`);
+    if (error) {
+      // Concurrency dedupe: if two identical dispatches race past the app-level
+      // idempotency check, the UNIQUE(idempotency_key) constraint rejects the
+      // second insert (Postgres 23505). Treat that as a dedupe hit, not a 500.
+      if (error.code === "23505") {
+        const existing = await this.findByIdempotencyKey(input.idempotency_key);
+        if (existing) return existing;
+      }
+      throw new Error(`course_jobs insert failed: ${error.message}`);
+    }
     return data as CourseJobRecord;
   },
 
