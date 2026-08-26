@@ -232,7 +232,7 @@ export default function BriefDispatchPanel({ signal, onDispatched }) {
                             {result.status_code ? `HTTP ${result.status_code}` : "no response"}
                         </span>
                     </div>
-                    {result.error && (
+                    {result.error && result.error !== `HTTP ${result.status_code}` && (
                         <div className="text-red-300 text-[10px] leading-relaxed">
                             {result.error}
                         </div>

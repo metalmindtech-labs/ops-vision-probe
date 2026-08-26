@@ -1,0 +1,34 @@
+{
+  "summary": "Verified EXPECTED honest-failure dispatch behaviour for CourseBriefV2 -> LearnForge (receiver intentionally not deployed). Created /app/backend/tests/test_iter14_dispatch_404_honest_failure.py (12 live API tests, all passing) and re-ran the existing 31 iter13 tests (43/43 pass total). Playwright E2E on the real preview URL confirmed Preview Brief contains only evidence/audience/hypothesis (zero generated course content) and Dispatch Brief produces a FAILED chip + result panel with the HTTP 404 debug hint, with no crash/white screen and zero console errors. CONCLUSION: the user-reported '✗ dispatch failed HTTP 404' is CORRECT, expected behaviour on the Radar side, not a regression.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "ConversionPanel > 05 Dispatch to LearnForge (dispatch-result-panel)", "issues": ["'HTTP 404' is rendered twice — once as the status_code badge and once as result.error text. Cosmetic redundancy only; consider suppressing result.error when it equals `HTTP ${status_code}`."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter14_dispatch_404_honest_failure.py",
+    "/app/backend/tests/test_iter13_course_brief_v2.py",
+    "/app/test_reports/pytest/iter14_results.xml"
+  ],
+  "action_items": [
+    "No functional fixes required. Optional cosmetic: de-duplicate the 'HTTP 404' text in dispatch-result-panel."
+  ],
+  "critical_code_review_comments": [
+    "dispatcher.dispatch_brief correctly breaks (no retry) on 4xx, retries only on 5xx/transport, and never touches the legacy webhook — verified live: http_status=404, status='failed', ok=false, hint mentions '/api/course-generation-jobs is not deployed yet' and 'No legacy fallback was attempted'.",
+    "Idempotency filter `status: {$ne: 'failed'}` correctly allows re-dispatch of failed jobs (verified: second dispatch returns deduplicated=false).",
+    "All job/brief responses project out MongoDB _id — verified absent in dispatch, job-status and brief/preview payloads.",
+    "Legacy gating verified live: POST /signals/{id}/publish, GET /signals/{id}/publish/preview and POST /signals/publish-all-live all return 410 with detail.error='legacy_publish_disabled' (RADAR_LEGACY_PUBLISH_ENABLED left false, .env untouched).",
+    "Minor: brief/job payloads reference course_job_* mirrored fields on the signal; job-status route only surfaces the latest job — acceptable, but a dispatch-attempt history would aid debugging."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter14_dispatch_404_honest_failure.py"],
+  "success_rate": { "backend": "100% (43/43 pytest)", "frontend": "100% (all E2E assertions passed)" },
+  "seed_data_creation": "None. Used existing converting signal 06981200-86b3-412e-9fa6-1578665160f5; dispatch attempts write failed course_jobs docs (expected, honest failure records).",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "N/A — app has no auth",
+  "context_for_next_testing_agent": "Backend v2 dispatch path is fully covered by tests/test_iter14_dispatch_404_honest_failure.py (live API) + tests/test_iter13_course_brief_v2.py (mocked transport). Correct routes: GET /api/signals/stats (not /api/stats) and POST /api/course-jobs/{job_id}/refresh. refresh on a failed job returns ok=false with error 'no status_url — LearnForge has not accepted this job' (graceful). Once LearnForge's /api/course-generation-jobs receiver is deployed, the 404-hint assertions in test_iter14 will need to be flipped to expect status 'accepted'/202.",
+  "rca_of_the_issue": "The reported '✗ dispatch failed HTTP 404' originates upstream: LEARNFORGE_COURSE_JOBS_URL (https://learnforge-core.vercel.app/api/course-generation-jobs) is intentionally not deployed and returns 404. Radar handles this correctly — endpoint returns HTTP 200 with a well-formed job {status:'failed', http_status:404, ok:false} plus an actionable hint, persists the honest failure, mirrors it to the signal, and performs no legacy fallback. No crash, no 500, no data corruption. Not a Radar defect."
+}
