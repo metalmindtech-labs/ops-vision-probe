@@ -175,7 +175,9 @@ violates the ownership boundary, and will be removed once v2 is live.
 
 
 > **Drop-in starting point:** `docs/learnforge_receiver_stub_kit/` ships a
-> ready-to-paste Next.js receiver stub (route + status endpoint + HMAC verify +
-> Zod schema + Prisma model + `verify_local.sh` smoke test) that covers steps
-> 1, 2 and 5 above. It acknowledges briefs as `accepted` and leaves a single
-> `TODO(generation)` seam for step 3 — it intentionally generates no content.
+> ready-to-paste Next.js + Supabase receiver patch (POST route + status
+> endpoint + HMAC verify + Zod `CourseBriefV2` schema + forbidden-content guard
+> + Supabase job store + SQL migration + Vitest suite + `verify_local.sh` smoke
+> test) covering steps 1, 2 and 5 above. It records briefs as `accepted` (202)
+> and leaves a single `TODO(generation)` seam for step 3 — it intentionally
+> generates no content.
