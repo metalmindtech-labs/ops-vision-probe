@@ -8,7 +8,7 @@
 // the caller's TODO(generation) seam.
 
 import crypto from "crypto";
-import { verifyRadarSignature } from "./verify";
+import { verifyRadarSignature, secretFingerprint } from "./verify";
 import { CourseBriefV2, assertNoContentFields } from "./brief";
 
 export const SUPPORTED_SCHEMA_VERSION = "2.0";
@@ -80,7 +80,12 @@ export async function processCourseBrief(deps: ProcessDeps): Promise<ProcessResu
   // 1) HMAC signature over the raw body (fail closed).
   const signature = getHeader("x-radar-signature");
   if (!verifyRadarSignature(rawBody, signature, secret)) {
-    return { status: 401, body: { error: "invalid_signature" } };
+    // Return expected_fp (non-reversible) so Radar's hint can show an exact
+    // MATCH/MISMATCH against its own signing fingerprint. Never the secret.
+    return {
+      status: 401,
+      body: { error: "invalid_signature", expected_fp: secretFingerprint(secret) },
+    };
   }
 
   // 2) Schema-version header fast-reject (before parsing).

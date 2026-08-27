@@ -128,6 +128,37 @@ npx vitest run tests/receiver.test.ts
    Expect `HTTP 202` and `status: "accepted"`. Re-run → `HTTP 200` (dedupe).
 5. `GET http://localhost:3000/api/course-generation-jobs/<job_id>` → `status: "accepted"`.
 6. Tamper the signature → expect `401 invalid_signature`.
+## Return `expected_fp` on 401 (secret-drift self-diagnosis)
+When the signature check fails, this receiver now returns a **non-reversible
+fingerprint** of the secret it verified against, so Radar's dispatch hint can
+show an exact MATCH/MISMATCH instead of a blind 401:
+
+```json
+HTTP 401
+{ "error": "invalid_signature", "expected_fp": "c42f2735" }
+```
+
+`expected_fp = sha256(secret).hexdigest()[:8]` — the **same** computation Radar
+uses for its signing fingerprint (verified parity: python == node). It never
+exposes the secret value. Radar already reads `expected_fp` (also accepts
+`secret_fp`/`fingerprint`).
+
+**Drop-in for a hand-written route** (if you're not using `lib/radar/receiver.ts`):
+```ts
+import crypto from "crypto";
+const secretFingerprint = (s?: string) =>
+  s ? crypto.createHash("sha256").update(s, "utf8").digest("hex").slice(0, 8) : "unset";
+
+// in the invalid-signature branch:
+return NextResponse.json(
+  { error: "invalid_signature", expected_fp: secretFingerprint(process.env.LEARNFORGE_WEBHOOK_SECRET) },
+  { status: 401 }
+);
+```
+If Radar's hint shows `secret_fp` ≠ `expected_fp`, the shared
+`LEARNFORGE_WEBHOOK_SECRET` is out of sync on one side — rotate/align both.
+
+
 
 ## Status / boundary notes
 - **Not deployed. Not live.** This is a repository patch for the LearnForge team.

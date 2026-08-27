@@ -35,6 +35,11 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 Sequence: `Leland public demand → Radar discovery/scoring → CourseBriefV2 → LearnForge generation pipeline → completed course → Stripe gate`.
 Radar never claims to have generated a course/syllabus/lesson/module/quiz.
 
+## Implemented (2026-06 — v28: Receiver emits `expected_fp` on 401 (kit) + Radar MATCH/MISMATCH verified)
+- **Receiver Kit updated** (`docs/learnforge_receiver_stub_kit/`): on invalid signature the receiver now returns `{ "error":"invalid_signature", "expected_fp":"<sha256(secret)[:8]>" }`. Added `secretFingerprint()` to `lib/radar/verify.ts`; `lib/radar/receiver.ts` includes it in the 401 body. README documents a copy-paste snippet for LearnForge's hand-written route. (LearnForge must apply this in learnforge-core — Radar can't push there.)
+- **Fingerprint parity proven:** python (Radar) == node (receiver) == `c42f2735` for the current 64-char secret.
+- **Radar consumption verified (unit):** `_remote_expected_fingerprint` extracts `expected_fp`/`secret_fp`/`fingerprint`; hint shows MATCH when equal, MISMATCH when different, and falls back to Radar-fp-only when absent (current live staging behaviour, since its route doesn't emit `expected_fp` yet).
+
 ## Implemented (2026-06 — v27: Fingerprint-on-failure hint for 401/403)
 - Dispatch failure hint on a `401/403` now self-explains: it includes **Radar's signing `secret_fp` (sha256 prefix) + length**, and — if the LearnForge receiver returns an expected fingerprint (`expected_fp`/`secret_fp`/`fingerprint`) in its error body — surfaces it with a `MATCH`/`MISMATCH` verdict. Never exposes the secret value.
 - Example (verified live with a deliberately wrong secret): `Signature rejected (HTTP 401). Radar signed with secret_fp=3d596966 (len=26). If the fingerprints differ, the shared LEARNFORGE_WEBHOOK_SECRET is out of sync — rotate/align both sides so they match.` Correct secret restored → `202 accepted`.
