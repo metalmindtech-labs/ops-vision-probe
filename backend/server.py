@@ -155,6 +155,11 @@ class Signal(SignalBase):
     visuals_model: Optional[str] = None
     visuals_style: Optional[str] = None
     visuals_errors: Optional[List[str]] = None
+    course_job_id: Optional[str] = None
+    course_job_status: Optional[str] = None
+    course_job_public_url: Optional[str] = None
+    course_job_dispatched_at: Optional[str] = None
+    course_job_error: Optional[str] = None
     created_at: str = Field(default_factory=now_iso)
     updated_at: str = Field(default_factory=now_iso)
 

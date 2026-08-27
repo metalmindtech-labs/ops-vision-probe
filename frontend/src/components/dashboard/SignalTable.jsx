@@ -29,7 +29,7 @@ function PriorityCell({ score }) {
                 style={{ backgroundColor: "currentColor" }}
             />
             <span className={`font-mono text-sm ${color}`}>{score}</span>
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-600">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400">
                 {tier}
             </span>
         </div>
@@ -170,7 +170,7 @@ export default function SignalTable({
                                             <span className="text-sm font-medium text-zinc-100 group-hover:text-lime-300 transition-colors">
                                                 {s.event_title}
                                             </span>
-                                            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-600 truncate max-w-md">
+                                            <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-400 truncate max-w-md">
                                                 {s.source_url ||
                                                     "leland.com/events/…"}
                                             </span>

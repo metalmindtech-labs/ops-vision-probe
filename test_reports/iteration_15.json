@@ -1,0 +1,35 @@
+{
+  "summary": "Iteration 15 SUCCESS-PATH gate for the LIVE Radar -> LearnForge STAGING integration. Backend: 8/8 pytest cases passed against the public preview URL, including (a) idempotent re-dispatch of the already-accepted target signal 06981200 (200, ok:true, deduplicated:true, status=accepted, http_status=202, remote_job_id 9cf89642-10cf-4e7b-865e-d568d4947121, non-null status_url, no second job created), (b) GET job-status = accepted, (c) POST /api/course-jobs/da1c5218-.../refresh against the LIVE staging GET endpoint returned ok:true, status_code 200, status accepted, (d) CourseBriefV2 preview contains source/demand_evidence/audience/commercial_hypothesis/generation_constraints.target_duration_min with zero forbidden fields (modules/lessons/quizzes/syllabus), (e) legacy POST /publish returns 410, and (f) a FRESH dispatch of exactly ONE extra signal (f7f1253a-2b8c-45c1-bc83-32803107710a) returned deduplicated:false, http_status 202, status accepted with a remote_job_id, and the immediate repeat returned deduplicated:true with the SAME remote_job_id. Stats briefs_dispatched incremented (2 -> 3). Frontend: convert action -> ConversionPanel -> Preview Course Brief rendered the brief JSON (evidence/audience/hypothesis present, no forbidden keys), Dispatch Brief produced an ACCEPTED job-status-chip, dispatch-result-panel correctly hidden on the deduplicated repeat, job-refresh-btn kept status ACCEPTED, no white screen, zero console/page errors. No writes beyond the target + one permitted fresh signal; production untouched; no .env or flag changes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/signals", "issue": "The Signal response model has no course_job_* fields, so the dispatch state that dispatcher._mirror_to_signal writes to the signals collection (course_job_id/status/public_url/dispatched_at/error) is stripped from the list payload (all rows return course_job_id:null even for dispatched signals). Not a functional break (UI fetches per-signal job-status), but the mirror write is currently unusable at list level and prevents showing dispatch state in the signal table."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Signal Tracker table (left column)", "issues": ["Row sub-metadata line (velocity/date/source micro-text under each event title) and the priority-band labels (CRITICAL/HIGH) render as very dark grey on near-black and are effectively illegible at 100% zoom - raise contrast to at least WCAG AA 4.5:1."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter15_live_staging_dispatch.py"
+  ],
+  "action_items": [
+    "OPTIONAL (minor): expose course_job_id / course_job_status on the Signal response model so GET /api/signals reflects the mirrored dispatch state, or drop the unused _mirror_to_signal writes.",
+    "OPTIONAL (design): increase contrast of the signal-row metadata and priority-band text in the Signal Tracker table."
+  ],
+  "critical_code_review_comments": [
+    "dispatcher.dispatch_brief idempotency filter {idempotency_key, status != 'failed'} behaved correctly on the live path: repeat dispatches never re-hit staging and return the stored accepted job.",
+    "No secret/signature/full-payload leakage observed in dispatch responses or logs; only body_len + truncated idem key are logged.",
+    "Failure honesty preserved: the pre-existing 404 job (signal 12a08182) is still recorded as status='failed' and is correctly NOT treated as deduplicable, so a retry would re-attempt dispatch."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "One new course_job created by the permitted fresh dispatch of signal f7f1253a-2b8c-45c1-bc83-32803107710a (accepted, 202) on the staging LearnForge DB. No other writes.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "test_credentials": "None required (no auth on Radar preview).",
+  "context_for_next_testing_agent": "Live staging receiver https://learnforge-staging.vercel.app/api/course-generation-jobs is healthy and fast (no cold-start timeouts seen; full suite ran in ~3s). Signals WITH course jobs now: 06981200 (accepted, remote 9cf89642), f7f1253a (accepted, fresh iter15), 12a08182 (failed 404 legacy). Do not dispatch additional signals unless explicitly asked. Regression suite: /app/backend/tests/test_iter15_live_staging_dispatch.py (run with -p no:randomly since TestFreshDispatch is order-dependent).",
+  "rca_of_the_issue": "No defects found on the tested paths. The previously reported 404/failed dispatch behaviour from iteration_13/14 is resolved by the deployed staging receiver; Radar-side idempotency correctly prevents duplicate remote jobs on repeat dispatch."
+}
