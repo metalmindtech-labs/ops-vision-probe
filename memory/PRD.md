@@ -35,6 +35,12 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 Sequence: `Leland public demand → Radar discovery/scoring → CourseBriefV2 → LearnForge generation pipeline → completed course → Stripe gate`.
 Radar never claims to have generated a course/syllabus/lesson/module/quiz.
 
+## Fixed (2026-06 — v25: Dispatch 401 "Invalid signature" — HMAC secret drift)
+- **Root cause:** the LearnForge staging receiver's webhook secret was rotated to a new 64-char value, but Radar Preview still held the old 45-char `RotatedSecret_Staging_2026_...` → `X-Radar-Signature` failed verification → `401`. (Radar's signing was correct throughout; the endpoint was reachable, health `200`.)
+- **Fix:** synced Radar Preview's `LEARNFORGE_WEBHOOK_SECRET` (backend/.env) to the current 64-char staging secret and restarted; secret is read per-call so restarts pick up rotations.
+- **Verified (testing agent iteration_17: 6/6 backend, 100% frontend):** fresh dispatch → `202 accepted, deduplicated:false`; repeat → `deduplicated:true` same remote job id; job-status → accepted; refresh → `200 accepted`; UI chip shows ACCEPTED; **no 401 anywhere**. Regression: `/app/backend/tests/test_iter17_secret_rotation_401_fix.py`.
+- Reminder: whenever the staging/prod webhook secret is rotated, Radar's `LEARNFORGE_WEBHOOK_SECRET` must be updated to match (both sides share one secret).
+
 ## Implemented (2026-06 — v24: Dispatch auto-polling — briefs light up READY on their own)
 - **BriefDispatchPanel auto-polls LearnForge job status** while a dispatched job is non-terminal (accepted/queued/generating/reviewing): calls `POST /api/course-jobs/{job_id}/refresh` every 6s with a leading tick, updates the status chip, and **flips to READY (with a toast + course link) on its own** — no manual refresh. Polling stops automatically on terminal states (ready/failed); a pulsing `job-autosync-indicator` shows while active. `onDispatched` held in a ref so parent re-renders don't tear down the interval.
 - **Verified (testing agent iteration_16: 5/5 frontend, zero console errors):** auto-poll fires without a click; `page.route` interception confirmed chip flips to READY + public-url link + polling halts; failed status also stops polling; manual refresh still works; brief preview has no forbidden content.

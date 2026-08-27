@@ -1,0 +1,21 @@
+{
+  "summary": "Verified the reported '401 Invalid signature' dispatch bug is FIXED after the LEARNFORGE_WEBHOOK_SECRET rotation sync. Backend: 6/6 pytest cases pass against the live staging receiver (https://learnforge-staging.vercel.app/api/course-generation-jobs) for signal 06981200-86b3-412e-9fa6-1578665160f5 — fresh dispatch returns ok:true, deduplicated:false, status_code 202, job.status 'accepted', http_status 202, non-null remote_job_id (9cf89642-10cf-4e7b-865e-d568d4947121) and status_url; repeat dispatch returns ok:true, deduplicated:true with the SAME job_id/remote_job_id; GET /api/signals/{id}/job-status returns 'accepted'; POST /api/course-jobs/{job_id}/refresh returns ok:true, status_code 200, status 'accepted' (live staging GET). No 401 / 'Invalid signature' / 'Signature rejected' anywhere in the job record, responses, or backend logs. Frontend: convert flow opened, dispatch-brief-btn clicked, job-status-chip renders 'accepted' with the ACCEPTED badge on section 05, no console/page errors, no crash; green dispatch-result-panel correctly hidden on the deduplicated path.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter17_secret_rotation_401_fix.py",
+    "/app/test_reports/pytest/iter17.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "dispatcher.dispatch_brief correctly keeps HMAC signing over the compact sorted body and no legacy fallback; secret is read per-call from env so restarts pick up rotations — consider adding a startup log of secret length (never the value) to catch future rotation drift early."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter17_secret_rotation_401_fix.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. Only writes were to the target signal: deleted its course_jobs row once to force a genuinely fresh (non-deduplicated) signed dispatch, which then re-created an accepted job. backend/.env untouched.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "test_credentials": "N/A — Radar has no auth",
+  "context_for_next_testing_agent": "Run `pytest tests/test_iter17_secret_rotation_401_fix.py -p no:randomly -o addopts=''` from /app/backend for the live-staging dispatch regression. Test 06 deletes course_jobs rows for the target signal to bypass Radar idempotency; the staging receiver itself is idempotent (returns the same remote_job_id for the same idempotency key). Staging cold start was not an issue (all calls <2s).",
+  "rca_of_the_issue": "Original 401 was HMAC secret drift: staging rotated to a 64-char secret while Radar held the old 45-char value, so X-Radar-Signature failed verification. Confirmed backend/.env now holds a 64-char secret and the live receiver accepts the signature with HTTP 202. Bug resolved."
+}
