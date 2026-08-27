@@ -35,6 +35,10 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 Sequence: `Leland public demand → Radar discovery/scoring → CourseBriefV2 → LearnForge generation pipeline → completed course → Stripe gate`.
 Radar never claims to have generated a course/syllabus/lesson/module/quiz.
 
+## Implemented (2026-06 — v26: Secret-drift guard at startup)
+- Backend `on_startup` now logs the LearnForge dispatch config — **endpoint + `secret_len` + a non-reversible sha256 fingerprint prefix (`secret_fp`), never the secret value** — so a rotation mismatch is obvious at boot instead of surfacing as a runtime 401. Warns loudly if `LEARNFORGE_WEBHOOK_SECRET` is unset.
+- Verified live: `LearnForge dispatch config · endpoint=https://learnforge-staging.vercel.app · secret_len=64 · secret_fp=c42f2735`. Log-only change, no behavior impact. The `secret_fp` also lets you compare Radar vs LearnForge secrets safely (compute `sha256(secret)[:8]` on both — they must match).
+
 ## Fixed (2026-06 — v25: Dispatch 401 "Invalid signature" — HMAC secret drift)
 - **Root cause:** the LearnForge staging receiver's webhook secret was rotated to a new 64-char value, but Radar Preview still held the old 45-char `RotatedSecret_Staging_2026_...` → `X-Radar-Signature` failed verification → `401`. (Radar's signing was correct throughout; the endpoint was reachable, health `200`.)
 - **Fix:** synced Radar Preview's `LEARNFORGE_WEBHOOK_SECRET` (backend/.env) to the current 64-char staging secret and restarted; secret is read per-call so restarts pick up rotations.

@@ -1239,6 +1239,28 @@ async def scheduled_retry_job():
 
 @app.on_event("startup")
 async def on_startup():
+    # Secret-drift guard: log LearnForge dispatch config (endpoint + secret
+    # length + a non-reversible fingerprint, NEVER the secret value) so a
+    # rotation mismatch is caught at boot instead of surfacing as a 401.
+    try:
+        import hashlib
+        secret = (os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()
+        jobs_url = (os.environ.get("LEARNFORGE_COURSE_JOBS_URL") or "").strip()
+        host = jobs_url.split("/api")[0] if jobs_url else "(unset)"
+        if secret:
+            fp = hashlib.sha256(secret.encode()).hexdigest()[:8]
+            logger.info(
+                "LearnForge dispatch config · endpoint=%s · secret_len=%d · secret_fp=%s (sha256 prefix, not the value)",
+                host, len(secret), fp,
+            )
+        else:
+            logger.warning(
+                "LearnForge dispatch config · endpoint=%s · LEARNFORGE_WEBHOOK_SECRET is NOT set — dispatches will fail HMAC verification (401)",
+                host,
+            )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("Secret-drift guard log failed: %s", e)
+
     try:
         count = await db.signals.count_documents({})
         if count == 0:
