@@ -15,6 +15,7 @@ Guarantees:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -46,6 +47,31 @@ def _jobs_url() -> Optional[str]:
 def _secret() -> Optional[str]:
     s = (os.environ.get("LEARNFORGE_WEBHOOK_SECRET") or "").strip()
     return s or None
+
+
+def _secret_fingerprint() -> tuple[str, int]:
+    """Non-reversible fingerprint (sha256 prefix) + length of the signing
+    secret. Safe to log/surface — never exposes the value."""
+    s = _secret()
+    if not s:
+        return ("unset", 0)
+    return (hashlib.sha256(s.encode()).hexdigest()[:8], len(s))
+
+
+def _remote_expected_fingerprint(resp) -> Optional[str]:
+    """Best-effort: pull an expected-secret fingerprint from the receiver's
+    error body if it returns one (keys: expected_fp / secret_fp / fingerprint)."""
+    try:
+        data = resp.json()
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(data, dict):
+        return None
+    for k in ("expected_fp", "secret_fp", "fingerprint", "expected_secret_fp"):
+        v = data.get(k)
+        if v:
+            return str(v)
+    return None
 
 
 def _client_factory(timeout: float = 20.0) -> httpx.AsyncClient:
@@ -226,10 +252,20 @@ async def dispatch_brief(db, signal_id: str) -> dict:
                 "No legacy fallback was attempted."
             )
         elif resp.status_code in (401, 403):
-            result["hint"] = (
-                "Signature rejected — LearnForge must verify HMAC-SHA256 over "
-                "the raw body with the shared LEARNFORGE_WEBHOOK_SECRET."
+            fp, ln = _secret_fingerprint()
+            remote_fp = _remote_expected_fingerprint(resp)
+            parts = [
+                f"Signature rejected (HTTP {resp.status_code}). ",
+                f"Radar signed with secret_fp={fp} (len={ln}). ",
+            ]
+            if remote_fp:
+                match = "MATCH" if remote_fp == fp else "MISMATCH"
+                parts.append(f"LearnForge expected secret_fp={remote_fp} → {match}. ")
+            parts.append(
+                "If the fingerprints differ, the shared LEARNFORGE_WEBHOOK_SECRET "
+                "is out of sync — rotate/align both sides so they match."
             )
+            result["hint"] = "".join(parts)
         break
 
     if not result["ok"]:

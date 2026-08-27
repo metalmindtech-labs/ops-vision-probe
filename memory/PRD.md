@@ -35,6 +35,11 @@ Build an internal mission-control dashboard for the LearnForge "Architect" to mo
 Sequence: `Leland public demand → Radar discovery/scoring → CourseBriefV2 → LearnForge generation pipeline → completed course → Stripe gate`.
 Radar never claims to have generated a course/syllabus/lesson/module/quiz.
 
+## Implemented (2026-06 — v27: Fingerprint-on-failure hint for 401/403)
+- Dispatch failure hint on a `401/403` now self-explains: it includes **Radar's signing `secret_fp` (sha256 prefix) + length**, and — if the LearnForge receiver returns an expected fingerprint (`expected_fp`/`secret_fp`/`fingerprint`) in its error body — surfaces it with a `MATCH`/`MISMATCH` verdict. Never exposes the secret value.
+- Example (verified live with a deliberately wrong secret): `Signature rejected (HTTP 401). Radar signed with secret_fp=3d596966 (len=26). If the fingerprints differ, the shared LEARNFORGE_WEBHOOK_SECRET is out of sync — rotate/align both sides so they match.` Correct secret restored → `202 accepted`.
+- Helpers added in `services/dispatcher.py`: `_secret_fingerprint()`, `_remote_expected_fingerprint(resp)`. To get the full MATCH/MISMATCH line, the LearnForge receiver can include `expected_fp` (= `sha256(secret)[:8]`) in its 401 JSON.
+
 ## Implemented (2026-06 — v26: Secret-drift guard at startup)
 - Backend `on_startup` now logs the LearnForge dispatch config — **endpoint + `secret_len` + a non-reversible sha256 fingerprint prefix (`secret_fp`), never the secret value** — so a rotation mismatch is obvious at boot instead of surfacing as a runtime 401. Warns loudly if `LEARNFORGE_WEBHOOK_SECRET` is unset.
 - Verified live: `LearnForge dispatch config · endpoint=https://learnforge-staging.vercel.app · secret_len=64 · secret_fp=c42f2735`. Log-only change, no behavior impact. The `secret_fp` also lets you compare Radar vs LearnForge secrets safely (compute `sha256(secret)[:8]` on both — they must match).
