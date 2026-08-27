@@ -90,5 +90,6 @@ export const DASHBOARD = {
     dispatchResultPanel: "dispatch-result-panel",
     jobStatusChip: "job-status-chip",
     jobRefreshBtn: "job-refresh-btn",
+    jobAutoSync: "job-autosync-indicator",
     jobPublicUrl: "job-public-url",
 };

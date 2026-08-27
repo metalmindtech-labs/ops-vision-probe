@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
@@ -52,6 +52,11 @@ export default function BriefDispatchPanel({ signal, onDispatched }) {
     const [refreshing, setRefreshing] = useState(false);
     const [result, setResult] = useState(null);
     const [job, setJob] = useState(null);
+    const [autoPolling, setAutoPolling] = useState(false);
+    const onDispatchedRef = useRef(onDispatched);
+    useEffect(() => {
+        onDispatchedRef.current = onDispatched;
+    }, [onDispatched]);
 
     useEffect(() => {
         setBrief(null);
@@ -64,6 +69,46 @@ export default function BriefDispatchPanel({ signal, onDispatched }) {
                 .catch(() => {});
         }
     }, [signal?.id]);
+
+    // Auto-poll LearnForge status while the job is non-terminal, so it lights
+    // up READY (or failed) on its own without a manual refresh click.
+    useEffect(() => {
+        const jobId = job?.job_id;
+        const status = job?.status;
+        const terminal = status === "ready" || status === "failed";
+        if (!jobId || terminal) {
+            setAutoPolling(false);
+            return;
+        }
+        setAutoPolling(true);
+        let cancelled = false;
+        const tick = async () => {
+            try {
+                const r = await BriefAPI.refreshJob(jobId);
+                if (cancelled) return;
+                const next = r?.job?.status;
+                setJob(r.job);
+                if (next === "ready") {
+                    toast.success("Course is READY on LearnForge", {
+                        description: "Generation complete — no refresh needed.",
+                    });
+                    onDispatchedRef.current?.();
+                } else if (next === "failed") {
+                    toast.error("LearnForge job failed", {
+                        description: r?.job?.error || "Check the job status.",
+                    });
+                }
+            } catch {
+                // transient — keep polling silently
+            }
+        };
+        tick(); // leading check so an already-terminal job lights up immediately
+        const id = setInterval(tick, 6000);
+        return () => {
+            cancelled = true;
+            clearInterval(id);
+        };
+    }, [job?.job_id, job?.status]);
 
     if (!signal) return null;
 
@@ -191,6 +236,16 @@ export default function BriefDispatchPanel({ signal, onDispatched }) {
                         </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                        {autoPolling && (
+                            <span
+                                data-testid={DASHBOARD.jobAutoSync}
+                                className="inline-flex items-center gap-1 text-sky-300/80 uppercase tracking-wider"
+                                title="Auto-syncing LearnForge status"
+                            >
+                                <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                                auto-sync
+                            </span>
+                        )}
                         {job.public_course_url && (
                             <a
                                 data-testid={DASHBOARD.jobPublicUrl}

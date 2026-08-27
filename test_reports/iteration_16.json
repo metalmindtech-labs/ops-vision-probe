@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only verification of BriefDispatchPanel auto-polling of LearnForge job status (signal 06981200-86b3-412e-9fa6-1578665160f5). All 5 requested scenarios passed via Playwright on the public preview URL: (1) auto-poll fires POST /api/course-jobs/da1c5218-.../refresh automatically within ~6-7s with no manual click, chip shows 'accepted' and job-autosync-indicator is visible; (2) with page.route interception returning status 'ready', chip flipped to READY in ~7s, job-public-url link appeared, READY success toast shown, auto-sync indicator disappeared and NO further /refresh calls were made in the following 9s (polling halted); (3) interception returning 'failed' -> chip shows failed, indicator gone, polling stopped (0 calls in 9s); (4) manual job-refresh-btn click hit the real backend returning HTTP 200 and kept status 'accepted' with no errors; (5) brief-preview-btn rendered brief-preview-json (2404 chars) containing none of modules/lessons/quizzes/syllabus. Zero console errors across all runs; no crashes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor (non-blocking): the auto-poll useEffect only uses setInterval, so the first status check happens 6s after the panel opens; consider an immediate leading tick so a job already terminal on the server lights up instantly.",
+    "Minor: onDispatched is in the poll effect dependency array — if a parent passes a non-memoized callback the interval is torn down/recreated on every parent render, which can delay ticks. Wrap onDispatched in useCallback."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (per request)", "frontend": "100% (5/5 scenarios)"},
+  "seed_data_creation": "none - used existing accepted job da1c5218-7df1-4fdd-aa10-594663bf69c4",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Auto-poll interval is 6000ms; terminal states (ready/failed) stop polling and hide job-autosync-indicator. Live staging receiver keeps returning 'accepted', so use page.route('**/api/course-jobs/*/refresh') interception to simulate ready/failed. Dashboard hydration takes ~5-10s; wait for [data-testid=signal-row-convert-<id>] with 45s timeout.",
+  "rca_of_the_issue": "N/A - no defects found"
+}
