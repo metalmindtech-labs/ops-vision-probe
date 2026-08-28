@@ -170,10 +170,20 @@ export default function Dashboard() {
         });
         try {
             const result = await ScraperAPI.run();
-            toast.success("Scrape complete", {
-                id: t,
-                description: `${result.discovered} discovered · ${result.created} new · ${result.updated} updated`,
-            });
+            if (result.llm_budget_exceeded) {
+                toast.warning("AI budget exceeded — top up to enrich", {
+                    id: t,
+                    description:
+                        result.message ||
+                        "The Emergent Universal Key budget is exceeded; new events couldn't be scored/saved.",
+                    duration: 12000,
+                });
+            } else {
+                toast.success("Scrape complete", {
+                    id: t,
+                    description: `${result.discovered} discovered · ${result.created} new · ${result.updated} updated`,
+                });
+            }
             await refresh();
         } catch (e) {
             toast.error("Scrape failed", { id: t, description: e?.message });
@@ -186,10 +196,18 @@ export default function Dashboard() {
         const t = toast.loading("Parsing pasted HTML…");
         try {
             const result = await ScraperAPI.ingestHtml(html);
-            toast.success("HTML ingested", {
-                id: t,
-                description: `${result.discovered} events · ${result.created} new · ${result.updated} updated`,
-            });
+            if (result.llm_budget_exceeded) {
+                toast.warning("AI budget exceeded — top up to enrich", {
+                    id: t,
+                    description: result.message || "Universal Key budget exceeded.",
+                    duration: 12000,
+                });
+            } else {
+                toast.success("HTML ingested", {
+                    id: t,
+                    description: `${result.discovered} events · ${result.created} new · ${result.updated} updated`,
+                });
+            }
             await refresh();
         } catch (e) {
             toast.error("Paste ingest failed", {
@@ -203,10 +221,18 @@ export default function Dashboard() {
         const t = toast.loading("Fetching Leland URL…");
         try {
             const result = await ScraperAPI.ingestUrl(url);
-            toast.success("URL ingested", {
-                id: t,
-                description: `${result.discovered} events · ${result.created} new · ${result.updated} updated`,
-            });
+            if (result.llm_budget_exceeded) {
+                toast.warning("AI budget exceeded — top up to enrich", {
+                    id: t,
+                    description: result.message || "Universal Key budget exceeded.",
+                    duration: 12000,
+                });
+            } else {
+                toast.success("URL ingested", {
+                    id: t,
+                    description: `${result.discovered} events · ${result.created} new · ${result.updated} updated`,
+                });
+            }
             await refresh();
         } catch (e) {
             const detail = e?.response?.data?.detail || e?.message || "fetch failed";

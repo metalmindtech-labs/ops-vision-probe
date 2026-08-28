@@ -67,6 +67,16 @@ export default function ScraperStatusBar({ status }) {
                         <span className="text-zinc-300">{last.updated}</span>
                     </div>
                 )}
+                {last?.llm_budget_exceeded && (
+                    <div
+                        className="flex items-center gap-1.5 text-amber-400 uppercase tracking-wider"
+                        title="AI enrichment paused — top up the Universal Key, then re-run the scraper"
+                        data-testid="scraper-budget-warning"
+                    >
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        AI budget exceeded — top up to enrich
+                    </div>
+                )}
             </div>
             <div className="text-zinc-500">
                 next in{" "}

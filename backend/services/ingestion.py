@@ -43,6 +43,7 @@ async def ingest_events(
     updated = 0
     skipped = 0
     errors: List[str] = []
+    llm_budget_exceeded = False
     run_id = str(uuid.uuid4())
 
     for ev in events:
@@ -141,9 +142,26 @@ async def ingest_events(
             created += 1
         except Exception as e:  # noqa: BLE001
             logger.exception("ingest error for %s: %s", ev.event_title, e)
+            msg = str(e).lower()
+            is_budget = (
+                ("budget" in msg and "exceed" in msg)
+                or "budget_exceeded" in msg
+                or "ratelimiterror" in msg
+                or "rate limit" in msg
+                or "too many requests" in msg
+            )
+            if is_budget:
+                llm_budget_exceeded = True
+                errors.append(
+                    f"{ev.event_title}: LLM budget exceeded — top up the Universal Key"
+                )
+                # Remaining enrichments would fail identically — stop early.
+                break
             errors.append(f"{ev.event_title}: {type(e).__name__}")
 
     skipped = max(0, len(events) - created - updated - len(errors))
+    if llm_budget_exceeded:
+        skipped = 0  # remaining events were never attempted (loop short-circuited)
     summary = {
         "id": run_id,
         "trigger": trigger,
@@ -152,8 +170,15 @@ async def ingest_events(
         "updated": updated,
         "skipped": skipped,
         "errors": errors,
+        "llm_budget_exceeded": llm_budget_exceeded,
         "ran_at": _now(),
     }
+    if llm_budget_exceeded:
+        summary["message"] = (
+            "AI enrichment paused — the Emergent Universal Key budget is exceeded, "
+            "so new events couldn't be scored/saved. Top up at Profile → Manage Plan "
+            "→ Universal Key → Add Balance (or enable auto top-up), then re-run the scraper."
+        )
     await db.ingestion_runs.insert_one(dict(summary))
     summary.pop("_id", None)
     return summary

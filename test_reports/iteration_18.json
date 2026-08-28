@@ -1,0 +1,32 @@
+{
+  "summary": "Verified the LLM budget-exceeded scraper fix end-to-end. Backend: POST /api/scraper/run returns HTTP 200 with llm_budget_exceeded=true, discovered=15, created=0, updated=0, and a SINGLE friendly error entry ('...: LLM budget exceeded — top up the Universal Key') proving the short-circuit works (1 error, not 15). 'message' field present and mentions topping up the Universal Key. GET /api/signals/stats identical before/after (total_signals=31 both times) — no partial writes. /api/scraper/status persists last_run with the flag/message and no _id leak. Frontend: clicked run-scraper-btn on the dashboard; a WARNING (amber) sonner toast 'AI budget exceeded — top up to enrich' appeared with the full Universal Key top-up description; NO 'Scrape complete' success toast; zero console/page errors; no crash. 6/6 pytest assertions passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/scraper/run", "issue": "Counter semantics: skipped=14 while discovered=15, created=0, updated=0, errors=1. The 14 events were never attempted (loop broke early) yet are reported as 'skipped', which could be read as 'already existed/ignored'. Consider a distinct field (e.g. not_attempted) or leaving skipped=0 when llm_budget_exceeded."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard status strip", "issues": ["Strip still reads 'LAST SCRAPE: JUST NOW · DISCOVERED 15 · NEW 0 · UPDATED 0' with no budget-exceeded indicator after the toast dismisses, so the original confusion can recur once the transient toast is gone. Consider a persistent amber badge/banner sourced from last_run.llm_budget_exceeded."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_iter18_llm_budget_shortcircuit.py"],
+  "action_items": [
+    "Optional: surface last_run.llm_budget_exceeded persistently in the dashboard status strip (toast is transient).",
+    "Optional: fix 'skipped' counter semantics for the short-circuit path."
+  ],
+  "critical_code_review_comments": [
+    "ingestion.py budget detection is substring-based on str(e).lower(); it will also match unrelated messages containing '429' (e.g. a title/id containing 429). Prefer matching on the LLM client's structured error type/status code.",
+    "The friendly error string is prefixed with the event title, which is fine, but the frontend only uses summary.message — errors[] text is only visible via /api/scraper/runs."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter18_llm_budget_shortcircuit.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. Scrape run created no signals (budget-exceeded path); one ingestion_runs summary row recorded.",
+  "should_call_test_agent_after_fix": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Universal Key is still over budget, so the budget-exceeded path remains live and reproducible. Reusable regression test: /app/backend/tests/test_iter18_llm_budget_shortcircuit.py (will start failing once the key is topped up — then created>0/llm_budget_exceeded=false is expected). Frontend scrape button testid: run-scraper-btn; toasts are sonner ([data-sonner-toast]).",
+  "rca_of_the_issue": "Root cause of the original '15 new signals but nothing added' confusion was enrich_signal() raising a ChatError per event due to the Emergent Universal Key budget being exhausted; each event was caught individually and the summary still reported discovered=15 with a green success toast. Fix verified: the except block now classifies budget/ratelimit errors, sets llm_budget_exceeded, appends one friendly error, breaks the loop, and the summary carries a top-up message the frontend renders as a warning toast."
+}
